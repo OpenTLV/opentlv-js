@@ -1,0 +1,92 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 OpenTLV
+name: JS checks
+on:
+  workflow_call:
+    inputs:
+      tier:
+        type: string
+        required: true
+permissions:
+  contents: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  contracts:
+    name: Infrastructure and workflow contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Migration and CI regressions
+        run: |
+          python -B scripts/verify_migration.py
+          python -B -m unittest discover -s tests -v
+      - uses: actions/setup-go@v6
+        with:
+          go-version: stable
+          cache: false
+      - name: Validate workflows
+        run: |
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+          "$(go env GOPATH)/bin/actionlint"
+  wasm:
+    name: Emscripten / ${{ matrix.configuration }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        configuration: ${{ fromJSON(inputs.tier == 'full' && '["Release", "Debug"]' || '["Release"]') }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: '4.0.10'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Ninja
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - name: Build and check the public JS/WASM boundary
+        env:
+          TIER: ${{ inputs.tier }}
+          CONFIGURATION: ${{ matrix.configuration }}
+        run: python -B scripts/ci.py --tier "$TIER" --configuration "$CONFIGURATION"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: js-evidence-${{ inputs.tier }}-${{ matrix.configuration }}-${{ github.run_attempt }}
+          path: build/ci/${{ inputs.tier }}/${{ matrix.configuration }}/evidence/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: success() && inputs.tier != 'pr'
+        with:
+          name: js-wasm-${{ inputs.tier }}-${{ matrix.configuration }}-${{ github.run_attempt }}
+          path: build/ci/${{ inputs.tier }}/${{ matrix.configuration }}/first/bindings/wasm/dist/
+          if-no-files-found: error
+  gate:
+    name: JS quality gate
+    if: always()
+    needs: [contracts, wasm]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every check to succeed
+        env:
+          CONTRACTS_RESULT: ${{ needs.contracts.result }}
+          WASM_RESULT: ${{ needs.wasm.result }}
+        run: |
+          test "$CONTRACTS_RESULT" = success
+          test "$WASM_RESULT" = success

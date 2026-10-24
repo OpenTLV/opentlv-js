@@ -72,7 +72,7 @@ depended on Core's `tlv` target and compiler policy, while the bridge used
 relative includes for shared helpers. These Core-owned headers were not copied.
 The Query facade runner accepts the output directory and a fixture JSON path
 as arguments; fixture generation, the shared corpus/oracle and ABI tests remain
-in Core. CI wiring belongs to #10 and manual migration to #13.
+in Core. CI wiring is documented below; manual migration belongs to #13.
 
 Source parity alone does not establish runtime or release readiness. No
 generated outputs are imported.
@@ -110,10 +110,29 @@ Release builds with the pinned source and toolchain. Hosted CI, browser/worker
 execution, tag-triggered validation and release attestation remain separate
 gates; this step does not claim them.
 
+## JS-owned CI (#10)
+
+The [PR/Main/Full and Release workflows](docs/ci.md) now own the original Node
+smoke/example, JS Query facade and Emscripten public Query ABI checks. They use
+the selected pinned Core's fixture generator, corpus/reference helper and ABI
+snapshots without migrating or duplicating those Core suites. Query inputs are
+verified against the selected commit before execution.
+
+PR and Main run Release; Full runs Release and Debug. Tag-triggered Release
+validation preserves the independent double-build comparison of all four
+outputs, and can also be rehearsed manually or locally. Emscripten 4.0.10 and
+Node 22 remain fixed at the baseline versions. The eight transferred source
+files and recorded #9 adaptations are unchanged by this CI wiring.
+
+Logs and result manifests distinguish local runs, hosted run identity and
+double-build reproducibility. Workflow implementation and local success do not
+establish hosted success or tag-triggered execution. No browser/worker runtime
+suite, package publication or release attestation is added.
+
 ## Next work
 
 - [Workspace #42](https://github.com/OpenTLV/opentlv-workspace/issues/42): registration and sibling development.
-- [#10](https://github.com/OpenTLV/opentlv-js/issues/10): tests and PR/Main/Full CI.
+- [#10](https://github.com/OpenTLV/opentlv-js/issues/10): collect successful hosted PR/Main/Full and tag reproducibility evidence after the workflows land.
 - [#11](https://github.com/OpenTLV/opentlv-js/issues/11): package identity; no npm publication.
 - [#12](https://github.com/OpenTLV/opentlv-js/issues/12): layout.
 - [#13](https://github.com/OpenTLV/opentlv-js/issues/13) and [Docs #93](https://github.com/OpenTLV/opentlv-docs/issues/93): documentation handoff.
