@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 OpenTLV
+name: JS Main CI
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: js-main-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  checks:
+    uses: ./.github/workflows/js-checks.yml
+    with:
+      tier: main
