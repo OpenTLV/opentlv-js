@@ -2,8 +2,8 @@
 
 The JS repository tests its public JavaScript facade and C-to-WASM boundary.
 Native parsing, writing, Document, Query and Schema behavior suites remain in
-Core. The migrated smoke test, parse example and Query facade runner are
-unchanged.
+Core. The migrated smoke test (`tests/smoke.mjs`), parse example
+(`examples/parse.mjs`) and Query facade runner retain their behavior.
 
 ## Tiers
 
@@ -78,6 +78,9 @@ available through the standalone CMake commands in the README.
 `--tier release` builds independently under `first/` and `second/`, each with
 its own fetched Core source and generated files. Every output must exist and
 be nonempty: `opentlv-core.js`, `opentlv-core.wasm`, `opentlv.mjs`, `query.mjs`.
+These files are in each build's `dist/` directory, also used by the workflow's
+output artifact upload. Repository source paths are documented in the
+[layout guide](../README.md#repository-layout).
 A mismatch in any one fails the run. Main and Full do not implicitly prove
 reproducibility; only the double-build check does. Each build also runs the
 [private package checks](packaging.md): offline dry-run/real packing, exact

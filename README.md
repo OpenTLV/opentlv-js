@@ -32,6 +32,38 @@ python scripts/verify_migration.py --core-source ../opentlv
 This checks source parity with the recorded build adaptations, not runtime
 compatibility.
 
+## Repository layout
+
+| Path | Responsibility |
+| --- | --- |
+| `src/` | JavaScript facade and Query ES modules |
+| `native/` | C-to-WASM bridge and its header |
+| `tests/` | Node smoke/package checks and Python infrastructure regressions |
+| `tests/query/` | JS facade runner consuming Core-owned fixtures |
+| `examples/` | Runnable Node parse example |
+| `cmake/` | WASM target, Core selection and immutable dependency pin |
+| `scripts/` | Migration verification, CI and private package preparation |
+| `packaging/` | Package entry point and packaged README templates |
+| `docs/` | Binding build, validation and distribution documentation |
+| `migration/` | Immutable source inventory and recorded build adaptations |
+
+The root CMake project includes `cmake/Core.cmake` and `cmake/Wasm.cmake`.
+Generated files belong in a separate build directory; the four distributable
+files are adjacent in `<build>/dist/`. Since layout normalization (#12), use a
+fresh build directory and replace the former `<build>/bindings/wasm/dist/`
+argument with `<build>/dist/` in local commands. For example:
+
+```sh
+node examples/parse.mjs build-wasm/dist
+node tests/smoke.mjs build-wasm/dist
+```
+
+Package imports, relative imports within the distributed modules and WASM asset
+names are unchanged. The source checkout is not an installable package; use the
+[checked private archive](docs/packaging.md). The
+[migration map](MIGRATION.md#standalone-layout-12) relates current paths to the
+immutable Core inventory.
+
 ## Standalone build
 
 Use Emscripten **4.0.10**, Node **22**, CMake **3.24 or newer**, Python **3.9 or
@@ -44,7 +76,7 @@ cmake --build build-wasm --target opentlv-wasm --parallel
 ctest --test-dir build-wasm --output-on-failure --no-tests=error
 ```
 
-The four outputs remain in `build-wasm/bindings/wasm/dist/`:
+The four outputs are in `build-wasm/dist/`:
 `opentlv-core.js`, `opentlv-core.wasm`, `opentlv.mjs` and `query.mjs`.
 The generated ES module retains the `createOpenTLV` factory and its
 web/worker/Node loader flags. CTest runs the existing Node smoke test and parse
@@ -93,7 +125,7 @@ python -B -m unittest discover -s tests -p test_core_dependency.py -v
 
 For reproducibility, configure and build again in a fresh `build-wasm-repeat`
 directory with the same toolchain and Release configuration. Compare SHA-256
-hashes for each of the four output files between the two `bindings/wasm/dist`
+hashes for each of the four output files between the two `dist`
 directories. Use independent default pinned builds, not a sibling override.
 
 The Query facade runner remains at `tests/query/wasm_facade.mjs`; it accepts the

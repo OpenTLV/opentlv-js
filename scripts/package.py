@@ -73,7 +73,7 @@ def stage(dist, selection, destination, root=ROOT):
     if not outputs["opentlv-core.wasm"].startswith(b"\0asm\x01\0\0\0"):
         raise ValueError("Expected a WebAssembly v1 binary")
     for name in ("opentlv.mjs", "query.mjs"):
-        if outputs[name] != read_file(root / "bindings/wasm/js" / name):
+        if outputs[name] != read_file(root / "src" / name):
             raise ValueError(f"Stale or modified JS wrapper: {name}")
     payload = {f"dist/{name}": content for name, content in outputs.items()}
     payload["package.json"] = (json.dumps(data, indent=2) + "\n").encode()
@@ -138,7 +138,7 @@ def check(build, output):
             raise ValueError("npm is required for local pack/install checks")
         report["npm_version"] = runner.run("npm-version", npm, "--version")
         staged = output / "stage"
-        hashes = stage(build / "bindings/wasm/dist", selection, staged)
+        hashes = stage(build / "dist", selection, staged)
         common = ("--json", "--ignore-scripts", "--offline", "--workspaces=false",
                   "--cache", output / "npm-cache")
         dry = json.loads(runner.run("pack-dry-run", npm, "pack", staged, "--dry-run", *common,
@@ -163,8 +163,8 @@ def check(build, output):
                 raise ValueError(f"Installed package differs: {name}")
         shutil.copyfile(ROOT / "tests/package_consumer.mjs", consumer / "check.mjs")
         runner.run("consumer", "node", consumer / "check.mjs")
-        runner.run("installed-smoke", "node", ROOT / "bindings/wasm/test/smoke.mjs", installed / "dist")
-        runner.run("installed-example", "node", ROOT / "bindings/wasm/examples/parse.mjs", installed / "dist")
+        runner.run("installed-smoke", "node", ROOT / "tests/smoke.mjs", installed / "dist")
+        runner.run("installed-example", "node", ROOT / "examples/parse.mjs", installed / "dist")
         if ci.read_selection(build) != selection:
             raise ValueError("Core selection changed during package checks")
         report.update(status="passed", version=metadata()["version"], files=hashes,

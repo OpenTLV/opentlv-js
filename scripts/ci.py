@@ -134,7 +134,7 @@ def build_and_check(runner, output, configuration, name):
     fixture = runner.evidence / f"{name}-query-fixtures.json"
     runner.run(f"{name}-fixtures", sys.executable, "-B", source / "tests/query/facade_fixtures.py",
                "--output", fixture)
-    dist = build / "bindings/wasm/dist"
+    dist = build / "dist"
     runner.run(f"{name}-facade", "node", ROOT / "tests/query/wasm_facade.mjs", dist, fixture)
     abi = build / "query-abi.js"
     runner.run(f"{name}-abi-build", "emcc", "-std=c99", "-DTLV_STATIC_DEFINE",
@@ -190,7 +190,7 @@ def execute(tier, configuration, output):
         report["builds"]["first"] = build_and_check(runner, output, configuration, "first")
         if tier == "release":
             report["builds"]["second"] = build_and_check(runner, output, configuration, "second")
-            first, second = (output / name / "bindings/wasm/dist" for name in ("first", "second"))
+            first, second = (output / name / "dist" for name in ("first", "second"))
             report["reproducible_outputs"] = compare_outputs(first, second)
             if report["builds"]["first"]["package"] != report["builds"]["second"]["package"]:
                 raise ValueError("Private package archives are not reproducible")

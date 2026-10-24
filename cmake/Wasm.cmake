@@ -1,12 +1,12 @@
 # Experimental WebAssembly module: the OpenTLV C core plus a small parsing
-# boundary (src/opentlv_wasm.h), compiled by the standalone Emscripten build.
+# boundary (native/opentlv_wasm.h), compiled by the standalone Emscripten build.
 #
 #   emcmake cmake -S . -B build-wasm -G Ninja -DCMAKE_BUILD_TYPE=Release
 #   cmake --build build-wasm --target opentlv-wasm
 
-add_executable(opentlv-wasm src/opentlv_wasm.c src/opentlv_wasm.h)
+add_executable(opentlv-wasm native/opentlv_wasm.c native/opentlv_wasm.h)
 target_link_libraries(opentlv-wasm PRIVATE OpenTLV::tlv)
-target_include_directories(opentlv-wasm PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
+target_include_directories(opentlv-wasm PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/native
     "${OPENTLV_JS_CORE_SOURCE}/bindings/common")
 opentlv_configure_compiler(opentlv-wasm)
 
@@ -17,8 +17,8 @@ set_target_properties(opentlv-wasm PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${_wasm_output_dir}"
 )
 set_property(TARGET opentlv-wasm APPEND PROPERTY LINK_DEPENDS
-    "${CMAKE_CURRENT_SOURCE_DIR}/js/opentlv.mjs"
-    "${CMAKE_CURRENT_SOURCE_DIR}/js/query.mjs")
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/opentlv.mjs"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/query.mjs")
 
 # Exported entry points come from EMSCRIPTEN_KEEPALIVE in opentlv_wasm.h. The
 # module is an ES module exporting a createOpenTLV() factory; it has no main()
@@ -39,9 +39,9 @@ target_link_options(opentlv-wasm PRIVATE
 # the generated module and .wasm file.
 add_custom_command(TARGET opentlv-wasm POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_CURRENT_SOURCE_DIR}/js/opentlv.mjs" "${_wasm_output_dir}/opentlv.mjs"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/opentlv.mjs" "${_wasm_output_dir}/opentlv.mjs"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_CURRENT_SOURCE_DIR}/js/query.mjs" "${_wasm_output_dir}/query.mjs"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/query.mjs" "${_wasm_output_dir}/query.mjs"
     VERBATIM
 )
 
@@ -50,7 +50,7 @@ if(OPENTLV_BUILD_WASM_TESTS)
     find_program(OPENTLV_NODE_EXECUTABLE node)
     if(OPENTLV_NODE_EXECUTABLE)
         add_test(NAME Integration_wasm
-            COMMAND ${OPENTLV_NODE_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/test/smoke.mjs" "${_wasm_output_dir}")
+            COMMAND ${OPENTLV_NODE_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tests/smoke.mjs" "${_wasm_output_dir}")
         set_tests_properties(Integration_wasm PROPERTIES LABELS "integration;wasm")
 
         # The "parse" use-case example shared with examples/tlv, examples/tlv++

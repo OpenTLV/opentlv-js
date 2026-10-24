@@ -4,7 +4,7 @@
 // there is no "write", "query" or "validate" example here yet.
 //
 // Run with: node examples/parse.mjs <directory with opentlv.mjs>
-// (build one first, see bindings/wasm/CMakeLists.txt).
+// (build one first, see cmake/Wasm.cmake).
 import { pathToFileURL } from "node:url";
 import { join, resolve } from "node:path";
 

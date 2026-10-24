@@ -22,7 +22,7 @@ class PackageTests(unittest.TestCase):
         self.root = Path(temporary.name)
         self.source = self.root / "source"
         for name in ("package.json", "packaging/index.mjs", "packaging/README.md", "LICENSE", "CHANGELOG.md",
-                     "bindings/wasm/js/opentlv.mjs", "bindings/wasm/js/query.mjs"):
+                     "src/opentlv.mjs", "src/query.mjs"):
             target = self.source / name
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(package.ROOT / name, target)
@@ -31,7 +31,7 @@ class PackageTests(unittest.TestCase):
         (self.dist / "opentlv-core.js").write_text("export default function createOpenTLV() {}\n")
         (self.dist / "opentlv-core.wasm").write_bytes(b"\0asm\x01\0\0\0")
         for name in ("opentlv.mjs", "query.mjs"):
-            shutil.copyfile(self.source / "bindings/wasm/js" / name, self.dist / name)
+            shutil.copyfile(self.source / "src" / name, self.dist / name)
         self.selection = dict(mode="pinned-source", release_verified=False, repository="fixture",
                               commit="a" * 40, tree="b" * 40, source_sha256="c" * 64,
                               version_inputs={"tag": "9.8.7"})

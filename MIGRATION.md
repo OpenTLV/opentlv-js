@@ -42,7 +42,8 @@ remain immutable references.
 | `tlv/*`, `cmake/*`, shared Query corpus/oracle/ABI tests | Stay in Core |
 | Generated `dist/*` | Rebuild from exact source/toolchain; not migrated source |
 
-Later layout normalization belongs to #12. Existing browser/worker/Node loader
+The [standalone layout](#standalone-layout-12) maps these initial destinations
+to their current paths after #12. Existing browser/worker/Node loader
 flags, `createOpenTLV`, growing memory, callback table growth, no filesystem,
 ES module exports and explicit object lifetimes remain unchanged.
 
@@ -61,7 +62,7 @@ test expectations are unchanged. Git attributes preserve LF line endings in
 these files on Windows so checkout conversion cannot invalidate their hashes.
 
 The immutable baseline inventory remains unchanged. The migration verifier
-now accounts for the narrowly recorded #9 adaptations below while checking the
+accounts for the narrowly recorded #9 and #12 adaptations below while checking the
 eight-file set, ownership/destinations and all 57 bridge declarations. It
 requires no Core checkout. Add `--core-source ../opentlv` to also compare the
 baseline tree and original source bytes with Core Git objects; the Core working
@@ -140,12 +141,49 @@ the private archives across its independent builds. This is not publication
 or release attestation. See [packaging](docs/packaging.md) and the separate
 [distribution follow-up register](docs/distribution-follow-ups.md).
 
+## Standalone layout (#12)
+
+The immutable inventory above retains its original paths, proposed destinations,
+sizes, blobs and hashes. `scripts/verify_migration.py` maps those eight baseline
+paths to the current source locations:
+
+| Original Core / initial JS path | Current JS path |
+| --- | --- |
+| `bindings/wasm/js/opentlv.mjs` | `src/opentlv.mjs` |
+| `bindings/wasm/js/query.mjs` | `src/query.mjs` |
+| `bindings/wasm/src/opentlv_wasm.c` | `native/opentlv_wasm.c` |
+| `bindings/wasm/src/opentlv_wasm.h` | `native/opentlv_wasm.h` |
+| `bindings/wasm/test/smoke.mjs` | `tests/smoke.mjs` |
+| `bindings/wasm/examples/parse.mjs` | `examples/parse.mjs` |
+| `bindings/wasm/CMakeLists.txt` | `cmake/Wasm.cmake` |
+| `tests/query/wasm_facade.mjs` | `tests/query/wasm_facade.mjs` |
+
+The root project now includes the WASM target definition from `cmake/`.
+Its source, wrapper and test paths follow this map; output placement changes
+from `<build>/bindings/wasm/dist/` to `<build>/dist/`. The existing target name,
+compiler policy, link options, output names, CTest names and test arguments
+are preserved. CI, package staging and artifact uploads consume the new output
+directory. Start with a fresh build directory when changing layouts.
+
+The `layout_sha256` in `build-adaptations.json` records the relocated CMake
+definition; the original baseline and #9 adapted hashes remain recorded.
+Only path comments change in the bridge header and parse example; the verifier
+reverses these exact edits before comparing baseline bytes. The #9 helper
+include adaptation still applies to the C source. JS wrappers, smoke and Query
+test bodies remain byte-identical, with the same 57 bridge declarations.
+The verifier rejects missing/extra transferred files and the obsolete source
+tree. No Core source inventory or native implementation is rewritten.
+
+Package exports, facade imports, adjacent runtime assets, independent package
+version and Core version semantics remain unchanged. The
+[repository layout guide](README.md#repository-layout) documents directory
+ownership and direct smoke/example commands.
+
 ## Next work
 
 - [Workspace #42](https://github.com/OpenTLV/opentlv-workspace/issues/42): registration and sibling development.
 - [#10](https://github.com/OpenTLV/opentlv-js/issues/10): collect successful hosted PR/Main/Full and tag reproducibility evidence after the workflows land.
 - [Distribution follow-ups](docs/distribution-follow-ups.md): npm publishing, security/advisory process and distribution improvements; no publication in migration.
-- [#12](https://github.com/OpenTLV/opentlv-js/issues/12): layout.
 - [#13](https://github.com/OpenTLV/opentlv-js/issues/13) and [Docs #93](https://github.com/OpenTLV/opentlv-docs/issues/93): documentation handoff.
 - [Core #698](https://github.com/OpenTLV/opentlv/issues/698): remove old sources only after standalone checks pass.
 - [#14](https://github.com/OpenTLV/opentlv-js/issues/14): coordinated final validation.

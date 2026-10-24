@@ -11,7 +11,7 @@
  * A thin wrapper over the OpenTLV C API: it parses nothing itself. Callers copy
  * the input into memory obtained from opentlv_wasm_alloc(), call
  * opentlv_wasm_parse(), read the JSON document from the result and release
- * everything again. bindings/wasm/js/opentlv.mjs does this for JavaScript callers.
+ * everything again. src/opentlv.mjs does this for JavaScript callers.
  *
  * The JSON document has the shape
  *
