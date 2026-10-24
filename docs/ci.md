@@ -13,10 +13,10 @@ Emscripten environment, so the SDK's bundled Node cannot silently replace it.
 
 | Workflow | Trigger | Runtime checks |
 | --- | --- | --- |
-| JS Pull Request CI | PR targeting `main`, without path filters | Release build, smoke, parse example, Query facade, WASM Query ABI |
+| JS Pull Request CI | PR targeting `main`, without path filters | Release build, smoke, parse example, Query facade, WASM Query ABI, private package checks |
 | JS Main CI | Push to `main` | Same checks on the actual merged commit; upload outputs |
 | JS Full CI | Manual or reusable workflow call | Release and Debug, each with the same checks; upload outputs |
-| JS Release reproducibility | Version-shaped tag push or manual rehearsal | Two fresh Release builds, all checks in each, compare SHA-256 of all four outputs |
+| JS Release reproducibility | Version-shaped tag push or manual rehearsal | Two fresh Release builds, all checks in each, compare all four output and private package hashes |
 
 Each workflow also runs the migration verifier, Python infrastructure
 regressions and actionlint 1.7.7. The reusable `js-checks.yml` provides a final
@@ -79,14 +79,24 @@ available through the standalone CMake commands in the README.
 its own fetched Core source and generated files. Every output must exist and
 be nonempty: `opentlv-core.js`, `opentlv-core.wasm`, `opentlv.mjs`, `query.mjs`.
 A mismatch in any one fails the run. Main and Full do not implicitly prove
-reproducibility; only the double-build check does.
+reproducibility; only the double-build check does. Each build also runs the
+[private package checks](packaging.md): offline dry-run/real packing, exact
+archive content checks, offline installation, package exports/version/asset
+tests and the existing smoke/example/Query facade against the installed files.
+The double-build tier additionally requires identical archive bytes, package
+metadata and file hashes. Node's bundled npm is required and its version is
+recorded in each package report.
 
 ## Evidence
 
 `evidence/result.json` records the tier, configuration, checkout commit/dirty
 state, tool versions, GitHub repository/SHA/ref/run/attempt when present, Core
 selection receipts, Query input identity, output hashes and command results.
-Logs, generated fixtures and observed ABI JSON accompany it. Failures retain a
+`first-package.json` (and `second-package.json` for Release) record the private
+package version, archive/file hashes, npm version and commands. Package staging,
+archives, consumers and detailed logs remain in the local `first-package/` and
+`second-package/` directories and are not included in uploaded release artifacts.
+Logs, generated fixtures and observed ABI JSON accompany the CI report. Failures retain a
 failed result and command logs; a failed comparison never sets
 `reproducibility_verified`. `release_verified` remains false: these are build
 and test results, not package/release attestation.

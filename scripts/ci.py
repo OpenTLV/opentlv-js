@@ -3,6 +3,7 @@
 """Run the JS-owned WASM checks against an independent, pinned Core checkout."""
 
 import argparse
+from contextlib import ExitStack
 import json
 import os
 from pathlib import Path
@@ -97,16 +98,21 @@ class Runner:
         # The upstream ABI checker uses assertions; optimization must not disable it.
         self.env.pop("PYTHONOPTIMIZE", None)
 
-    def run(self, name, *command):
+    def run(self, name, *command, separate_stderr=False):
         command = [str(value) for value in command]
         print(f"[{name}] {' '.join(command)}", flush=True)
         log = self.evidence / f"{name}.log"
-        with log.open("wb") as stream:
+        error_log = self.evidence / f"{name}.stderr.log"
+        with ExitStack() as stack:
+            stream = stack.enter_context(log.open("wb"))
+            errors = stack.enter_context(error_log.open("wb")) if separate_stderr else subprocess.STDOUT
             result = subprocess.run(command, cwd=ROOT, env=self.env,
-                                    stdout=stream, stderr=subprocess.STDOUT, check=False)
+                                    stdout=stream, stderr=errors, check=False)
         self.commands.append(dict(name=name, command=command, exit_code=result.returncode))
         if result.returncode:
             print(log.read_text(encoding="utf-8", errors="replace"), flush=True)
+            if separate_stderr:
+                print(error_log.read_text(encoding="utf-8", errors="replace"), flush=True)
             raise RuntimeError(f"{name} failed ({result.returncode}); see {log}")
         return log.read_text(encoding="utf-8").strip()
 
@@ -134,7 +140,11 @@ def build_and_check(runner, output, configuration, name):
     runner.run(f"{name}-abi-build", "emcc", "-std=c99", "-DTLV_STATIC_DEFINE",
                "-I", source / "tlv/include", "-I", build / "core/generated/include",
                source / "tests/query/abi.c", "-o", abi)
-    observed = runner.run(f"{name}-abi-observe", "node", abi)
+    # This probe uses Emscripten's CommonJS default, while package.json marks
+    # the source tree as ESM. Make the probe format explicit in either location.
+    commonjs_abi = abi.with_suffix(".cjs")
+    abi.rename(commonjs_abi)
+    observed = runner.run(f"{name}-abi-observe", "node", commonjs_abi)
     abi_json = runner.evidence / f"{name}-query-abi.json"
     abi_json.write_text(observed + "\n", encoding="utf-8")
     runner.run(f"{name}-abi-check", sys.executable, "-B", source / "tests/query/check_abi.py",
@@ -142,7 +152,18 @@ def build_and_check(runner, output, configuration, name):
     # Catch changes during the checks as well as before them.
     if read_selection(build) != selection or verify_query_inputs(source, selection["commit"]) != query:
         raise ValueError("Core inputs changed during JS integration checks")
-    return dict(core=selection, query_inputs=query, outputs=output_hashes(dist))
+    package_output = output / f"{name}-package"
+    try:
+        runner.run(f"{name}-package", sys.executable, "-B", ROOT / "scripts/package.py",
+                   "--build", build, "--output", package_output)
+    finally:
+        if (package_output / "result.json").is_file():
+            shutil.copyfile(package_output / "result.json", runner.evidence / f"{name}-package.json")
+    package_result = json.loads((package_output / "result.json").read_text(encoding="utf-8"))
+    installed_dist = package_output / "consumer/node_modules/opentlv-js/dist"
+    runner.run(f"{name}-package-facade", "node", ROOT / "tests/query/wasm_facade.mjs", installed_dist, fixture)
+    return dict(core=selection, query_inputs=query, outputs=output_hashes(dist),
+                package={key: package_result[key] for key in ("version", "archive_sha256", "files")})
 
 
 def execute(tier, configuration, output):
@@ -171,6 +192,8 @@ def execute(tier, configuration, output):
             report["builds"]["second"] = build_and_check(runner, output, configuration, "second")
             first, second = (output / name / "bindings/wasm/dist" for name in ("first", "second"))
             report["reproducible_outputs"] = compare_outputs(first, second)
+            if report["builds"]["first"]["package"] != report["builds"]["second"]["package"]:
+                raise ValueError("Private package archives are not reproducible")
             report["reproducibility_verified"] = True
         report["status"] = "passed"
     except Exception as error:

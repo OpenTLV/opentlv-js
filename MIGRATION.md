@@ -129,11 +129,22 @@ double-build reproducibility. Workflow implementation and local success do not
 establish hosted success or tag-triggered execution. No browser/worker runtime
 suite, package publication or release attestation is added.
 
+## Private package preparation (#11)
+
+The independent version in `package.json` starts at `0.1.0-dev.0`. Private
+staging wraps the unchanged four outputs with explicit ESM/asset exports and
+adds `packageVersion`; the existing loaded facade's `version` remains Core's
+version. No transferred source or bridge declaration changes. Every CI tier
+checks an offline npm archive and installed consumer; Release also compares
+the private archives across its independent builds. This is not publication
+or release attestation. See [packaging](docs/packaging.md) and the separate
+[distribution follow-up register](docs/distribution-follow-ups.md).
+
 ## Next work
 
 - [Workspace #42](https://github.com/OpenTLV/opentlv-workspace/issues/42): registration and sibling development.
 - [#10](https://github.com/OpenTLV/opentlv-js/issues/10): collect successful hosted PR/Main/Full and tag reproducibility evidence after the workflows land.
-- [#11](https://github.com/OpenTLV/opentlv-js/issues/11): package identity; no npm publication.
+- [Distribution follow-ups](docs/distribution-follow-ups.md): npm publishing, security/advisory process and distribution improvements; no publication in migration.
 - [#12](https://github.com/OpenTLV/opentlv-js/issues/12): layout.
 - [#13](https://github.com/OpenTLV/opentlv-js/issues/13) and [Docs #93](https://github.com/OpenTLV/opentlv-docs/issues/93): documentation handoff.
 - [Core #698](https://github.com/OpenTLV/opentlv/issues/698): remove old sources only after standalone checks pass.
