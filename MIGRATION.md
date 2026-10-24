@@ -2,6 +2,7 @@
 
 Tracking: [Core #697](https://github.com/OpenTLV/opentlv/issues/697),
 [source transfer #8](https://github.com/OpenTLV/opentlv-js/issues/8),
+[standalone build #9](https://github.com/OpenTLV/opentlv-js/issues/9),
 [epic #696](https://github.com/OpenTLV/opentlv/issues/696).
 
 ## Immutable baseline
@@ -29,11 +30,11 @@ remain immutable references.
 
 | Original Core path | Initial destination or dependency |
 | --- | --- |
-| `bindings/wasm/src/*` | Same path in JS; preserve C bridge and signatures |
+| `bindings/wasm/src/*` | Same path in JS; shared helper include paths adapted in #9 |
 | `bindings/wasm/js/*` | Same path in JS; preserve both ES modules |
 | `bindings/wasm/test/*` | Same path in JS; preserve smoke behavior |
 | `bindings/wasm/examples/*` | Same path in JS; preserve parse example |
-| `bindings/wasm/CMakeLists.txt` | Same initial path; standalone adaptation in #9 |
+| `bindings/wasm/CMakeLists.txt` | Same path; standalone target adaptation recorded in #9 |
 | `tests/query/wasm_facade.mjs` | JS facade runner, consuming selected Core fixtures |
 | `docs/development/webassembly.md` | JS-owned manual after #13 |
 | `.github/workflows/wasm.yml` | Adapt contracts into JS tiers under #10 |
@@ -53,35 +54,65 @@ browser behavior or npm publication.
 
 ## Source transfer (#8)
 
-All seven files under `bindings/wasm/` and `tests/query/wasm_facade.mjs` are
+All seven files under `bindings/wasm/` and `tests/query/wasm_facade.mjs` were
 imported byte-for-byte from the immutable baseline at their original paths.
 Their existing license notices, error handling, memory ownership, exports and
 test expectations are unchanged. Git attributes preserve LF line endings in
 these files on Windows so checkout conversion cannot invalidate their hashes.
 
-Run `python scripts/verify_migration.py` to check the exact eight-file set,
-recorded sizes, SHA-256 and Git blob hashes, ownership/destinations and all 57
-bridge declarations. The verifier uses the unchanged baseline inventory and
+The immutable baseline inventory remains unchanged. The migration verifier
+now accounts for the narrowly recorded #9 adaptations below while checking the
+eight-file set, ownership/destinations and all 57 bridge declarations. It
 requires no Core checkout. Add `--core-source ../opentlv` to also compare the
-baseline tree and source bytes with Core Git objects; the Core working tree and
-current branch are not used. This verifier intentionally describes the initial
-source transfer; later build/layout changes must record their adaptations.
+baseline tree and original source bytes with Core Git objects; the Core working
+tree and current branch are not used for migration parity checks.
 
-The transferred CMake file is not a standalone entry point. It still requires
-Core's `tlv` target and `opentlv_configure_compiler`, and the C bridge still
-includes `../../common/query_schema.h` and `../../common/path_query.h`. These
-Core-owned headers are not copied. Resolving that dependency belongs to #9.
+The initial transfer did not provide a standalone entry point. The CMake file
+depended on Core's `tlv` target and compiler policy, while the bridge used
+relative includes for shared helpers. These Core-owned headers were not copied.
 The Query facade runner accepts the output directory and a fixture JSON path
 as arguments; fixture generation, the shared corpus/oracle and ABI tests remain
 in Core. CI wiring belongs to #10 and manual migration to #13.
 
-Source parity does not establish standalone runtime, browser/worker, hosted CI,
-tag reproducibility or release readiness. No generated outputs are imported.
+Source parity alone does not establish runtime or release readiness. No
+generated outputs are imported.
+
+## Standalone build adaptations (#9)
+
+- The root CMake project selects Emscripten 4.0.10 and a verified source Core,
+  then builds the existing `opentlv-wasm` target. Node tests require Node 22.
+- `bindings/wasm/CMakeLists.txt` links public `OpenTLV::tlv` and adds the selected
+  Core's `bindings/common` include directory. The command comment is updated;
+  output names, link flags, wrapper copying and test bodies are unchanged.
+  [build-adaptations.json](migration/build-adaptations.json) records its original
+  and adapted SHA-256 hashes.
+- `opentlv_wasm.c` changes only the two shared helper includes from
+  `../../common/<name>` to `<name>`. The verifier reverses these exact include
+  changes before comparing the full file to the baseline hashes.
+- The other six transferred files remain byte-identical. The bridge
+  declarations, wrappers, smoke test, example and Query facade expectations
+  retain their original contracts.
+
+[core-source.json](cmake/core-source.json) pins the baseline commit/tree and the
+SHA-256 of all 217 Core build inputs. It also locks the Git metadata used by
+Core's version generator, including semantic tags on the selected tag commit.
+The default FetchContent path verifies these values before evaluating Core
+CMake and before building. No package search, binary fallback, moving branch or
+unverified source fallback is used. All 17 baseline capabilities are required.
+
+An explicit `FETCHCONTENT_SOURCE_DIR_OPENTLV_CORE` selects local development;
+its actual commit, input checksum and dirty state are recorded separately in
+`core-selection.json`. This supports sibling edits without representing them
+as pinned or attested release inputs. See the [build instructions](README.md#standalone-build).
+
+Reproducibility means byte-identical hashes for all four outputs from two fresh
+Release builds with the pinned source and toolchain. Hosted CI, browser/worker
+execution, tag-triggered validation and release attestation remain separate
+gates; this step does not claim them.
 
 ## Next work
 
 - [Workspace #42](https://github.com/OpenTLV/opentlv-workspace/issues/42): registration and sibling development.
-- [#9](https://github.com/OpenTLV/opentlv-js/issues/9): standalone build and verified Core dependency.
 - [#10](https://github.com/OpenTLV/opentlv-js/issues/10): tests and PR/Main/Full CI.
 - [#11](https://github.com/OpenTLV/opentlv-js/issues/11): package identity; no npm publication.
 - [#12](https://github.com/OpenTLV/opentlv-js/issues/12): layout.

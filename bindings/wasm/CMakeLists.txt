@@ -1,14 +1,13 @@
 # Experimental WebAssembly module: the OpenTLV C core plus a small parsing
-# boundary (src/opentlv_wasm.h), compiled with Emscripten. Included only when
-# OPENTLV_BUILD_WASM=ON, so native builds never see it.
+# boundary (src/opentlv_wasm.h), compiled by the standalone Emscripten build.
 #
-#   emcmake cmake -S . -B build-wasm -DOPENTLV_BUILD_WASM=ON -DCMAKE_BUILD_TYPE=Release \
-#       -DOPENTLV_BUILD_CXX=OFF -DOPENTLV_BUILD_TESTS=OFF -DOPENTLV_BUILD_EXAMPLES=OFF
+#   emcmake cmake -S . -B build-wasm -G Ninja -DCMAKE_BUILD_TYPE=Release
 #   cmake --build build-wasm --target opentlv-wasm
 
 add_executable(opentlv-wasm src/opentlv_wasm.c src/opentlv_wasm.h)
-target_link_libraries(opentlv-wasm PRIVATE tlv)
-target_include_directories(opentlv-wasm PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(opentlv-wasm PRIVATE OpenTLV::tlv)
+target_include_directories(opentlv-wasm PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
+    "${OPENTLV_JS_CORE_SOURCE}/bindings/common")
 opentlv_configure_compiler(opentlv-wasm)
 
 set(_wasm_output_dir "${CMAKE_CURRENT_BINARY_DIR}/dist")

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 OpenTLV
-"""Verify the issue #8 source transfer against the immutable Core inventory."""
+"""Verify baseline source parity and the recorded standalone build adaptations."""
 
 import argparse
 import hashlib
@@ -34,6 +34,9 @@ def verify(core_source=None):
                or entry["path"] == "tests/query/wasm_facade.mjs"]
     if len(entries) != len(TRANSFERRED) or {entry["path"] for entry in entries} != TRANSFERRED:
         raise ValueError("Source inventory does not contain the exact eight-file transfer")
+    adaptations = json.loads((ROOT / "migration/build-adaptations.json").read_text(encoding="utf-8"))
+    if set(adaptations) != {"bindings/wasm/CMakeLists.txt"}:
+        raise ValueError("Unexpected standalone build adaptations")
     actual = {path.relative_to(ROOT).as_posix()
               for directory in (ROOT / "bindings/wasm", ROOT / "tests/query")
               for path in directory.rglob("*") if path.is_file()}
@@ -54,6 +57,24 @@ def verify(core_source=None):
                 or entry["mode"] != "100644"):
             raise ValueError(f"Unexpected transfer ownership, destination or mode: {name}")
         data = (ROOT / name).read_bytes()
+        if name == "bindings/wasm/src/opentlv_wasm.c":
+            # Only dependency include paths change; verify all other C bytes.
+            for helper in ("query_schema.h", "path_query.h"):
+                adapted = f'#include "{helper}"'.encode()
+                original = f'#include "../../common/{helper}"'.encode()
+                if data.count(adapted) != 1:
+                    raise ValueError(f"Unexpected shared helper include: {helper}")
+                data = data.replace(adapted, original)
+        if name in adaptations:
+            adaptation = adaptations[name]
+            if (adaptation["baseline_sha256"] != entry["sha256"]
+                    or hashlib.sha256(data).hexdigest() != adaptation["adapted_sha256"]):
+                raise ValueError(f"Unrecorded build adaptation: {name}")
+            if core_source is not None:
+                baseline = git("show", f"{BASELINE}:{name}")
+                if hashlib.sha256(baseline).hexdigest() != entry["sha256"]:
+                    raise ValueError(f"Core baseline differs from the inventory: {name}")
+            continue
         blob = hashlib.sha1(f"blob {len(data)}\0".encode() + data).hexdigest()
         if (len(data) != entry["size"] or hashlib.sha256(data).hexdigest() != entry["sha256"]
                 or blob != entry["blob"]):
@@ -65,7 +86,8 @@ def verify(core_source=None):
         r"^OPENTLV_WASM_API\s+([^;]+);", header, re.M)]
     if declarations != inventory["bridge_declarations"]:
         raise ValueError("Bridge declarations differ from the baseline")
-    print(f"Verified {len(entries)} transferred files and {len(declarations)} bridge declarations "
+    print(f"Verified {len(entries)} transferred files (including recorded build adaptations) "
+          f"and {len(declarations)} bridge declarations "
           f"at Core {BASELINE}")
     if core_source is not None:
         print("Verified against Core baseline Git objects (independent of checkout HEAD)")
