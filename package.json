@@ -1,0 +1,34 @@
+{
+  "name": "opentlv-js",
+  "version": "0.1.0-dev.0",
+  "private": true,
+  "description": "Experimental OpenTLV JavaScript facade and WebAssembly bridge",
+  "license": "MIT",
+  "type": "module",
+  "main": "./index.mjs",
+  "exports": {
+    ".": { "import": "./index.mjs" },
+    "./opentlv.mjs": { "import": "./dist/opentlv.mjs" },
+    "./query.mjs": { "import": "./dist/query.mjs" },
+    "./opentlv-core.js": { "import": "./dist/opentlv-core.js" },
+    "./opentlv-core.wasm": "./dist/opentlv-core.wasm",
+    "./version": { "import": "./version.mjs" },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.mjs",
+    "version.mjs",
+    "dist/opentlv.mjs",
+    "dist/query.mjs",
+    "dist/opentlv-core.js",
+    "dist/opentlv-core.wasm",
+    "package-info.json",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "engines": { "node": "22.x" },
+  "repository": { "type": "git", "url": "https://github.com/OpenTLV/opentlv-js.git" },
+  "bugs": { "url": "https://github.com/OpenTLV/opentlv-js/issues" },
+  "homepage": "https://github.com/OpenTLV/opentlv-js#readme"
+}

@@ -11,8 +11,10 @@ example are migrated from the recorded Core baseline. The standalone CMake
 build compiles the selected Core and bridge together with Emscripten, preserving
 the original JavaScript API and output names. Build adaptations are recorded in
 [MIGRATION.md](MIGRATION.md).
-There is no JavaScript package, TypeScript declaration set or published npm
-artifact yet. Core retains its implementation until the standalone gates pass.
+Private local JS/WASM package preparation is available with independent version
+metadata and explicit ESM exports. There is no published npm artifact or
+TypeScript declaration set yet. Core retains its implementation until the
+standalone gates pass.
 
 The behavior-preserving baseline is Core commit
 `a9a6f9470c2b285744738b40196bef9d0341fead`, using Emscripten 4.0.10 and Node 22.
@@ -112,6 +114,27 @@ run. CI consumes and verifies Query fixtures and ABI references from the pinned
 Core checkout. It executes Node only, matching the baseline's coverage.
 Browser/worker runtime, hosted CI and publication require separate evidence.
 
+## Private package and version
+
+[package.json](package.json) defines the independent JS version, initially
+`0.1.0-dev.0`, with `private: true`. After a default pinned build, run:
+
+```sh
+python -B scripts/package.py --build build-wasm --output build/package-check
+```
+
+This stages the four existing outputs, checks a local npm archive and installs
+it offline into an isolated Node 22 consumer. Nothing is published. Use the
+checked archive rather than installing the source checkout. The package root
+adds `packageVersion`; `opentlv-js/version` exposes it without loading WASM.
+The existing `(await loadOpenTLV()).version` continues to report the embedded Core
+version. Core provenance is recorded separately in `package-info.json`.
+
+See the [packaging guide](docs/packaging.md),
+[package API/asset README](packaging/README.md) and
+[separate distribution follow-ups](docs/distribution-follow-ups.md). The local
+name does not reserve or promise an npm registry name/scope.
+
 ## Ownership
 
 `opentlv-js` owns the C-to-WASM bridge, JavaScript wrappers, facade interoperability
@@ -121,7 +144,7 @@ and public ABI snapshots. The Docs portal owns assembly and playground UI;
 Workspace owns repository registration and integration smoke coverage.
 
 The original API and four outputs (`opentlv-core.js`, `opentlv-core.wasm`,
-`opentlv.mjs`, `query.mjs`) are preserved by the migration. Package naming,
+`opentlv.mjs`, `query.mjs`) are preserved by the migration. Registry naming,
 TypeScript support, toolchain upgrades and API redesign are not part of it.
 
 ## License

@@ -131,6 +131,14 @@ class RunnerTests(unittest.TestCase):
             runner = ci.Runner(self.root)
             self.assertEqual(runner.run("assertions", sys.executable, "-c", "print(__debug__)"), "True")
 
+    def test_stderr_notices_do_not_corrupt_json_stdout(self):
+        runner = ci.Runner(self.root)
+        output = runner.run("json", sys.executable, "-c",
+                            "import sys; print('[1]'); print('npm notice', file=sys.stderr)",
+                            separate_stderr=True)
+        self.assertEqual(json.loads(output), [1])
+        self.assertIn("npm notice", (self.root / "json.stderr.log").read_text())
+
     def test_local_core_receipt_rejected(self):
         (self.root / "core-selection.json").write_text(json.dumps({"mode": "local-development"}))
         with self.assertRaisesRegex(ValueError, "pinned-source"):
@@ -154,7 +162,7 @@ class RunnerTests(unittest.TestCase):
         dist.mkdir(parents=True)
         for filename in ci.OUTPUTS:
             (dist / filename).write_bytes(filename.encode())
-        return {"outputs": ci.output_hashes(dist)}
+        return {"outputs": ci.output_hashes(dist), "package": {"archive_sha256": "fixture"}}
 
     def test_only_release_requires_two_builds(self):
         for tier in ci.TIERS:
@@ -182,6 +190,21 @@ class RunnerTests(unittest.TestCase):
                 patch.object(ci, "build_and_check", side_effect=self.fake_build), \
                 patch.object(ci, "compare_outputs", side_effect=ValueError("hash mismatch")):
             with self.assertRaisesRegex(ValueError, "hash mismatch"):
+                ci.execute("release", "Release", output)
+        result = json.loads((output / "evidence/result.json").read_text())
+        self.assertEqual(result["status"], "failed")
+        self.assertFalse(result["reproducibility_verified"])
+
+    def test_package_mismatch_cannot_pass_release(self):
+        def changed_package(runner, output, configuration, name):
+            result = self.fake_build(runner, output, configuration, name)
+            result["package"]["archive_sha256"] = name
+            return result
+
+        output = self.root / "different-packages"
+        with patch.object(ci.Runner, "run", self.fake_command), \
+                patch.object(ci, "build_and_check", side_effect=changed_package):
+            with self.assertRaisesRegex(ValueError, "package archives are not reproducible"):
                 ci.execute("release", "Release", output)
         result = json.loads((output / "evidence/result.json").read_text())
         self.assertEqual(result["status"], "failed")
