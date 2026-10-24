@@ -7,6 +7,13 @@ Tracking: [Core #697](https://github.com/OpenTLV/opentlv/issues/697),
 
 ## Immutable baseline
 
+Documentation ownership transferred separately in #13. The
+[documentation source record](migration/documentation-source.json) identifies
+the exact Core revision of [the migrated WASM manual](docs/webassembly.md).
+Its API section and code examples are preserved; only standalone build paths,
+owner links, notification instructions and version identity are adapted.
+The runtime source inventory and example bytes remain unchanged.
+
 | Identity | Value |
 | --- | --- |
 | Original repository | `https://github.com/OpenTLV/opentlv` |

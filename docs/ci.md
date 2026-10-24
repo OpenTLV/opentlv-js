@@ -113,3 +113,52 @@ alone does not prove all checks passed.
 Local runs report `hosted: false`. They can establish local smoke, facade, ABI
 and reproducibility results, but cannot establish a successful hosted PR/Main/
 Full run, tag-triggered execution, branch protection or publication.
+
+## Documentation updates
+
+JS owns [the WASM manual](webassembly.md), the unchanged
+[parse example](../examples/parse.mjs), and [docs-examples.json](../docs-examples.json).
+The catalog's `component_version` must equal the independent version in
+`package.json`; it is not the embedded Core version. Docs assembles these sources
+at a reviewed commit, retaining JS source/edit links. A documentation update
+does not establish runtime compatibility with the portal's selected Core.
+
+After the complete `JS Main CI` checks succeed, `docs_changes` compares relevant
+paths against the previous successful official Main push. This includes changes
+from intervening failed or cancelled pushes. First runs inspect the complete
+tree. Manuals, examples, packaging, package/Core metadata and notification
+infrastructure count; unrelated runtime source changes do not notify Docs.
+The producer uploads `docs-notification-<run_attempt>/notification.json` with
+its exact repository, commit, run ID, attempt and change flag using read-only
+credentials.
+
+`docs-notify.yml` runs separately on successful Main completion. It performs no
+checkout, validates that exact JSON against the official push run, and sends
+`component-docs-updated` with source `js`, repository `OpenTLV/opentlv-js`, the
+producer SHA, `ref: main` and producer run ID. The dispatch secret is available
+only in the final inline step. No relevant change means no dispatch or token
+requirement. Missing credentials, invalid evidence or failed dispatch fail the
+notifier without changing the completed build result.
+
+For the initial [Docs #93](https://github.com/OpenTLV/opentlv-docs/issues/93) handoff:
+
+1. Configure this repository's `OPENTLV_DOCS_DISPATCH_TOKEN` with fine-grained
+   **Contents: write** access to `OpenTLV/opentlv-docs` for repository dispatch.
+   The ordinary `GITHUB_TOKEN` cannot dispatch to another repository.
+2. Verify Docs has `DOCS_UPDATES_TOKEN` for creating update PRs that trigger CI.
+   If its default token cannot read JS Actions/history, configure the separate
+   `DOCS_SOURCE_READ_TOKEN` with **Actions: read** and **Contents: read** on JS.
+3. Merge Docs registration/receiver support first. It pins the already merged
+   layout baseline and keeps the historical Core manual available until the
+   standalone manual is included in a reviewed JS pin.
+4. Merge JS changes; successful JS Main and its notifier propose an exact-SHA
+   Docs pin update. Review that pin and require Docs validation before merging.
+
+The receiver verifies the configured producer and main ancestry, rejects stale
+or divergent updates, and treats replay as a no-op. Retry a failed notifier
+while its attempt-specific artifact is retained; if expired, a new successful
+Main run is needed. HTTP 204 proves dispatch acceptance only. Receiver processing,
+the pin PR, hosted checks and publication require their own evidence. Local tests
+mock delivery and do not configure secrets or publish. Release/tag workflows do
+not send this documentation notification. The portal's existing playground
+binary producer remains separate from this documentation handoff.
