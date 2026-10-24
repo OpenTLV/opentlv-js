@@ -4,6 +4,8 @@
     "adapted_sha256": "4294286e0462d313c8f29d69cdf4b42cd9a8f2a1d955335ec6882fd9ae435e79",
     "reason": "Standalone command, public OpenTLV::tlv target and selected Core shared-helper include directory; output names, link flags and test bodies unchanged.",
     "layout_sha256": "122955c7974ed6ad6f3938a622d33d78f4790e93cbc0da327e2021946cdb2bdc",
-    "layout_reason": "Relocate to cmake/Wasm.cmake included by the root project; update native, JS and test paths and place outputs in <build>/dist. Target, flags and runtime contracts unchanged."
+    "layout_reason": "Relocate to cmake/Wasm.cmake included by the root project; update native, JS and test paths and place outputs in <build>/dist. Target, flags and runtime contracts unchanged.",
+    "helper_ownership_sha256": "06bea19d9f14bb6d147802f23e6e48877fcc2251c3cdd9574026a4eeb0215d46",
+    "helper_ownership_reason": "Core #698: own path_query.h and query_schema.h in native/; remove the Core bindings/common include dependency. Preserve target, flags and runtime contracts."
   }
 }

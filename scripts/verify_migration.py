@@ -13,6 +13,8 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 BASELINE = "a9a6f9470c2b285744738b40196bef9d0341fead"
 TRANSFERRED = {
+    "bindings/common/path_query.h": "native/path_query.h",
+    "bindings/common/query_schema.h": "native/query_schema.h",
     "bindings/wasm/CMakeLists.txt": "cmake/Wasm.cmake",
     "bindings/wasm/examples/parse.mjs": "examples/parse.mjs",
     "bindings/wasm/js/opentlv.mjs": "src/opentlv.mjs",
@@ -30,10 +32,10 @@ def verify(core_source=None):
             or inventory["repository"] != "https://github.com/OpenTLV/opentlv"):
         raise ValueError("Unexpected migration baseline")
     entries = [entry for entry in inventory["files"]
-               if entry["path"].startswith("bindings/wasm/")
+               if entry["path"].startswith(("bindings/wasm/", "bindings/common/"))
                or entry["path"] == "tests/query/wasm_facade.mjs"]
     if len(entries) != len(TRANSFERRED) or {entry["path"] for entry in entries} != set(TRANSFERRED):
-        raise ValueError("Source inventory does not contain the exact eight-file transfer")
+        raise ValueError("Source inventory does not contain the exact ten-file transfer")
     adaptations = json.loads((ROOT / "migration/build-adaptations.json").read_text(encoding="utf-8"))
     if set(adaptations) != {"bindings/wasm/CMakeLists.txt"}:
         raise ValueError("Unexpected standalone build adaptations")
@@ -62,7 +64,10 @@ def verify(core_source=None):
             raise ValueError("Core baseline tree differs from the inventory")
     for entry in entries:
         name = entry["path"]
-        if (entry["owner"] != "opentlv-js" or entry["migration_destination"] != name
+        # The immutable baseline predates the final helper ownership transfer.
+        helper = name.startswith("bindings/common/")
+        if (entry["owner"] != ("Core" if helper else "opentlv-js")
+                or entry["migration_destination"] != (None if helper else name)
                 or entry["mode"] != "100644"):
             raise ValueError(f"Unexpected transfer ownership, destination or mode: {name}")
         data = (ROOT / TRANSFERRED[name]).read_bytes()
@@ -87,7 +92,7 @@ def verify(core_source=None):
         if name in adaptations:
             adaptation = adaptations[name]
             if (adaptation["baseline_sha256"] != entry["sha256"]
-                    or hashlib.sha256(data).hexdigest() != adaptation["layout_sha256"]):
+                    or hashlib.sha256(data).hexdigest() != adaptation["helper_ownership_sha256"]):
                 raise ValueError(f"Unrecorded build adaptation: {name}")
             if core_source is not None:
                 baseline = git("show", f"{BASELINE}:{name}")

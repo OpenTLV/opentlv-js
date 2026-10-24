@@ -4,10 +4,10 @@
 #   emcmake cmake -S . -B build-wasm -G Ninja -DCMAKE_BUILD_TYPE=Release
 #   cmake --build build-wasm --target opentlv-wasm
 
-add_executable(opentlv-wasm native/opentlv_wasm.c native/opentlv_wasm.h)
+add_executable(opentlv-wasm native/opentlv_wasm.c native/opentlv_wasm.h
+    native/path_query.h native/query_schema.h)
 target_link_libraries(opentlv-wasm PRIVATE OpenTLV::tlv)
-target_include_directories(opentlv-wasm PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/native
-    "${OPENTLV_JS_CORE_SOURCE}/bindings/common")
+target_include_directories(opentlv-wasm PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/native)
 opentlv_configure_compiler(opentlv-wasm)
 
 set(_wasm_output_dir "${CMAKE_CURRENT_BINARY_DIR}/dist")

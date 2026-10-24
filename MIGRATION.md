@@ -45,7 +45,7 @@ remain immutable references.
 | `tests/query/wasm_facade.mjs` | JS facade runner, consuming selected Core fixtures |
 | `docs/development/webassembly.md` | JS-owned manual after #13 |
 | `.github/workflows/wasm.yml` | Adapt contracts into JS tiers under #10 |
-| `bindings/common/*` | Consume from pinned Core; do not duplicate native helpers |
+| `bindings/common/*` | Initially consumed from Core; transferred to JS `native/` under Core #698 |
 | `tlv/*`, `cmake/*`, shared Query corpus/oracle/ABI tests | Stay in Core |
 | Generated `dist/*` | Rebuild from exact source/toolchain; not migrated source |
 
@@ -70,7 +70,8 @@ these files on Windows so checkout conversion cannot invalidate their hashes.
 
 The immutable baseline inventory remains unchanged. The migration verifier
 accounts for the narrowly recorded #9 and #12 adaptations below while checking the
-eight-file set, ownership/destinations and all 57 bridge declarations. It
+original eight-file set plus the two private adapters transferred under Core #698,
+baseline ownership/destinations and all 57 bridge declarations. It
 requires no Core checkout. Add `--core-source ../opentlv` to also compare the
 baseline tree and original source bytes with Core Git objects; the Core working
 tree and current branch are not used for migration parity checks.
@@ -102,7 +103,8 @@ generated outputs are imported.
   retain their original contracts.
 
 [core-source.json](cmake/core-source.json) pins the baseline commit/tree and the
-SHA-256 of all 217 Core build inputs. It also locks the Git metadata used by
+SHA-256 of the Core build inputs (originally 217; 215 after the private helper
+transfer under Core #698). It also locks the Git metadata used by
 Core's version generator, including semantic tags on the selected tag commit.
 The default FetchContent path verifies these values before evaluating Core
 CMake and before building. No package search, binary fallback, moving branch or
@@ -185,6 +187,28 @@ Package exports, facade imports, adjacent runtime assets, independent package
 version and Core version semantics remain unchanged. The
 [repository layout guide](README.md#repository-layout) documents directory
 ownership and direct smoke/example commands.
+
+## Private adapter ownership (Core #698)
+
+The final extraction transfers `bindings/common/path_query.h` and
+`bindings/common/query_schema.h` to `native/path_query.h` and
+`native/query_schema.h`. These are binding allocation/diagnostic adapters over
+public C APIs; Core has no consumer of them. Lua and Python own their copies in
+their standalone repositories. This repository owns the WASM copies and all
+JavaScript/TypeScript-specific sources, documentation and examples.
+
+The original inventory still records its historical Core ownership. The verifier
+maps both additional files and checks their exact baseline bytes, Git blobs and
+SHA-256 hashes without changing that immutable record. The new
+`helper_ownership_sha256` records the final CMake adaptation while preserving
+both earlier hashes. The Core lock retains the same commit, tree and version
+inputs; only its input checksum is recalculated over `CMakeLists.txt`, `cmake/`
+and `tlv/`, excluding the two adapters now checked as JS sources.
+
+Current builds work with both the historical pinned Core and a cleaned sibling
+Core without `bindings/`. Merge and validate this JS change before Core removal.
+The remaining binding-specific guide content transferred from Core commit
+`ec89b763` is maintained in [the WASM manual](docs/webassembly.md#binding-contracts-and-examples).
 
 ## Next work
 

@@ -13,8 +13,8 @@ the original JavaScript API and output names. Build adaptations are recorded in
 [MIGRATION.md](MIGRATION.md).
 Private local JS/WASM package preparation is available with independent version
 metadata and explicit ESM exports. There is no published npm artifact or
-TypeScript declaration set yet. Core retains its implementation until the
-standalone gates pass.
+TypeScript declaration set yet. WASM, JavaScript and future TypeScript APIs,
+private native adapters, examples and documentation belong to this repository.
 
 The behavior-preserving baseline is Core commit
 `a9a6f9470c2b285744738b40196bef9d0341fead`, using Emscripten 4.0.10 and Node 22.
@@ -37,7 +37,7 @@ compatibility.
 | Path | Responsibility |
 | --- | --- |
 | `src/` | JavaScript facade and Query ES modules |
-| `native/` | C-to-WASM bridge and its header |
+| `native/` | C-to-WASM bridge and private Query/Schema adapters |
 | `tests/` | Node smoke/package checks and Python infrastructure regressions |
 | `tests/query/` | JS facade runner consuming Core-owned fixtures |
 | `examples/` | Runnable Node parse example |
@@ -90,7 +90,7 @@ needed; `OPENTLV_BUILD_WASM_TESTS=OFF` disables Node test registration.
 The default dependency is the exact Git commit in
 [cmake/core-source.json](cmake/core-source.json). CMake FetchContent obtains it
 without package discovery or a floating branch. Before configuring Core, the
-verifier checks the commit, tree, SHA-256 of 217 build inputs and Git version
+verifier checks the commit, tree, SHA-256 of 215 build inputs and Git version
 metadata. It checks the same inputs again before each build. Checksum or
 identity failures stop the build. All baseline capabilities are enabled and
 Core is linked statically through `OpenTLV::tlv`; prebuilt native libraries are
@@ -98,7 +98,7 @@ not accepted as WASM dependencies.
 
 The source checksum is SHA-256 of UTF-8 JSON containing sorted
 `[relative_path, file_sha256]` pairs, using compact separators, for
-`CMakeLists.txt`, `cmake/`, `tlv/` and `bindings/common/`. Added files in those
+`CMakeLists.txt`, `cmake/` and `tlv/`. Added files in those
 directories also change the checksum. `build-wasm/core-selection.json` records
 the selected path, commit, tree, checksum, Git version inputs and mode. This is
 source provenance, not release attestation.
@@ -116,8 +116,8 @@ The override must be a compatible Core Git checkout and is recorded as
 `local-development`, even when its commit matches the pin. Local edits to build
 inputs are allowed and recorded with their checksum and dirty status. Changes
 after configuration require reconfiguration. A receipt from this mode is not
-evidence of the official pinned build. Shared helper headers stay in the
-selected Core; they are not vendored here.
+evidence of the official pinned build. The private adapters in `native/` use
+public C headers and are owned here; the selected Core needs no `bindings/` tree.
 
 ## Build verification
 
