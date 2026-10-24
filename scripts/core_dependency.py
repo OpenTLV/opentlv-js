@@ -11,7 +11,7 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-INPUTS = ("CMakeLists.txt", "cmake", "tlv", "bindings/common")
+INPUTS = ("CMakeLists.txt", "cmake", "tlv")
 
 
 def digest(data):

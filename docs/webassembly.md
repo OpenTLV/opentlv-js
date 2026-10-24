@@ -8,7 +8,7 @@ The module provides parse tooling plus owning compiled Query, checked Document
 editing and contextual Query Schema validation. It wraps the existing C API in
 `native/opentlv_wasm.c`; no parsing or Query semantics are duplicated.
 The EMV dictionary is available as an annotation module (below). Remaining
-public-facade gaps are tracked in the [binding capability matrix](https://github.com/OpenTLV/opentlv/blob/main/docs/concepts/bindings.md).
+public-facade gaps are described in [Binding contracts and examples](#binding-contracts-and-examples).
 
 ## Build
 
@@ -278,3 +278,71 @@ The [private package guide](packaging.md) documents `packageVersion` and
 `opentlv-js/version`. The existing `(await loadOpenTLV()).version` identifies the
 embedded Core, not the JS package. The example catalog records the JS version;
 a documentation pin does not establish compatibility with the portal's Core pin.
+
+## Binding contracts and examples
+
+This repository owns WASM, JavaScript and TypeScript integration, including the
+private native adapters, API documentation, examples and tests. TypeScript
+declarations are not available yet; their addition belongs here. Core owns the
+public C execution contracts and canonical Query fixtures/ABI snapshots.
+
+### Native adapters and capabilities
+
+`native/path_query.h` translates bounded V1 path failures to Query diagnostics.
+`native/query_schema.h` owns temporary workspace for the public Query Schema
+validator. Both are private binding adapters; parsing and validation semantics
+remain in Core. The build consumes public C headers through `OpenTLV::tlv` and
+does not require a Core `bindings/` directory.
+
+The facade includes parse-to-JSON tooling and owning compiled Query/Document
+operations. Query supports configured/custom Formats, semantic Tag adapters,
+scoped/Definition/EMV resolvers, NUM/BCD/TEXT/DATE conversion callbacks, contextual
+Schema validation, selection edits, source events, ordinals and bounded V1 path
+queries. General Reader/Writer parity and deterministic wire generation are not
+exposed. Native C capability availability alone does not establish JS coverage.
+
+Document options accept `retain_source_locations`; unretained or invalidated
+source properties produce Query SOURCE diagnostics. Semantic visitor records do
+not expose raw Length. The parse presentation adapter has its own 64-level
+output capacity, separate from native Reader/Schema workspace limits.
+
+`QueryError` carries the C message, structured `location` and owned Query
+evidence. `query.kind_name`, Reader `operation_name` and Codec names accompany
+numeric categories. Common evidence appears once in `query.diagnostic`.
+
+### Format selection and LLDP example
+
+The `lldp` and `nfc-type2` formats appear in the loaded instance's `formats` only
+when compiled in. Neither interprets NDEF or adds an implicit NFC Terminator
+stop. Parse tooling does not add a general writing API; Document encoding has
+the selected native Format's writer restrictions.
+
+```javascript
+// After loadOpenTLV() resolves to opentlv:
+const result = opentlv.parse(new Uint8Array([6, 2, 0, 120]), { format: "lldp" });
+console.assert(result.elements[0].tag === "03");
+```
+
+The `emv` Format selects definite framing. The `emv` annotation module supplies
+definitions for display independently of framing: using it with `ber` does not
+enforce EMV framing. Module selection does not load `.otlv` files or require a
+runtime interpreter.
+
+The earlier `profile` JSON field and parse option are now `module`;
+`PROFILES` and `api.profiles` became `MODULES` and `api.modules`. The old names
+have no compatibility aliases.
+
+### Executable example coverage
+
+[examples/parse.mjs](../examples/parse.mjs) demonstrates nested BER parsing and
+traversal through the supported JavaScript loader. There are no dedicated
+quick-start round-trip, Writer, construction, Document, Query, Schema or Codec
+example programs yet. This is example coverage, not a claim that those APIs all
+lack implementations.
+
+After an Emscripten build, run the Node example explicitly, or run CTest with
+`OPENTLV_BUILD_WASM_TESTS=ON`; building WASM alone does not prove execution.
+The smoke test, Query facade regressions and wasm32 ABI check are owned by this
+repository's [CI](ci.md), consuming the selected Core's shared fixtures and ABI
+contract. A future iterable Reader must follow JavaScript iteration/error
+conventions while preserving the public C execution semantics.

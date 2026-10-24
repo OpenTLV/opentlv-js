@@ -22,7 +22,7 @@ class CoreSelectionTests(unittest.TestCase):
         self.git("init", "-q")
         self.git("config", "core.autocrlf", "false")
         self.git("config", "core.abbrev", "9")
-        for name in ("CMakeLists.txt", "cmake/version.cmake", "tlv/core.c", "bindings/common/helper.h"):
+        for name in ("CMakeLists.txt", "cmake/version.cmake", "tlv/core.c"):
             path = self.source / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("// fixture\n", encoding="utf-8")
@@ -46,7 +46,8 @@ class CoreSelectionTests(unittest.TestCase):
     def test_clean_pinned_source(self):
         receipt = self.inspect()
         self.assertEqual(receipt["commit"], self.lock["commit"])
-        self.assertEqual(receipt["input_count"], 4)
+        self.assertEqual(receipt["input_count"], 3)
+        self.assertFalse((self.source / "bindings").exists())
         self.assertFalse(receipt["dirty"])
         self.assertFalse(receipt["release_verified"])
 
