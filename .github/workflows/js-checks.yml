@@ -74,7 +74,7 @@ jobs:
         if: success() && inputs.tier != 'pr'
         with:
           name: js-wasm-${{ inputs.tier }}-${{ matrix.configuration }}-${{ github.run_attempt }}
-          path: build/ci/${{ inputs.tier }}/${{ matrix.configuration }}/first/bindings/wasm/dist/
+          path: build/ci/${{ inputs.tier }}/${{ matrix.configuration }}/first/dist/
           if-no-files-found: error
   gate:
     name: JS quality gate

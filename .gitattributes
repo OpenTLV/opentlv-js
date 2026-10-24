@@ -1,3 +1,7 @@
 # Keep transferred sources byte-identical to the recorded Core Git blobs.
-/bindings/wasm/** text eol=lf
+/src/** text eol=lf
+/native/** text eol=lf
+/examples/** text eol=lf
+/tests/smoke.mjs text eol=lf
+/cmake/Wasm.cmake text eol=lf
 /tests/query/wasm_facade.mjs text eol=lf

@@ -158,7 +158,7 @@ class RunnerTests(unittest.TestCase):
         return "v22.16.0" if name == "version-node" else "fixture"
 
     def fake_build(self, runner, output, configuration, name):
-        dist = output / name / "bindings/wasm/dist"
+        dist = output / name / "dist"
         dist.mkdir(parents=True)
         for filename in ci.OUTPUTS:
             (dist / filename).write_bytes(filename.encode())

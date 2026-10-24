@@ -13,14 +13,14 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 BASELINE = "a9a6f9470c2b285744738b40196bef9d0341fead"
 TRANSFERRED = {
-    "bindings/wasm/CMakeLists.txt",
-    "bindings/wasm/examples/parse.mjs",
-    "bindings/wasm/js/opentlv.mjs",
-    "bindings/wasm/js/query.mjs",
-    "bindings/wasm/src/opentlv_wasm.c",
-    "bindings/wasm/src/opentlv_wasm.h",
-    "bindings/wasm/test/smoke.mjs",
-    "tests/query/wasm_facade.mjs",
+    "bindings/wasm/CMakeLists.txt": "cmake/Wasm.cmake",
+    "bindings/wasm/examples/parse.mjs": "examples/parse.mjs",
+    "bindings/wasm/js/opentlv.mjs": "src/opentlv.mjs",
+    "bindings/wasm/js/query.mjs": "src/query.mjs",
+    "bindings/wasm/src/opentlv_wasm.c": "native/opentlv_wasm.c",
+    "bindings/wasm/src/opentlv_wasm.h": "native/opentlv_wasm.h",
+    "bindings/wasm/test/smoke.mjs": "tests/smoke.mjs",
+    "tests/query/wasm_facade.mjs": "tests/query/wasm_facade.mjs",
 }
 
 
@@ -32,17 +32,26 @@ def verify(core_source=None):
     entries = [entry for entry in inventory["files"]
                if entry["path"].startswith("bindings/wasm/")
                or entry["path"] == "tests/query/wasm_facade.mjs"]
-    if len(entries) != len(TRANSFERRED) or {entry["path"] for entry in entries} != TRANSFERRED:
+    if len(entries) != len(TRANSFERRED) or {entry["path"] for entry in entries} != set(TRANSFERRED):
         raise ValueError("Source inventory does not contain the exact eight-file transfer")
     adaptations = json.loads((ROOT / "migration/build-adaptations.json").read_text(encoding="utf-8"))
     if set(adaptations) != {"bindings/wasm/CMakeLists.txt"}:
         raise ValueError("Unexpected standalone build adaptations")
-    actual = {path.relative_to(ROOT).as_posix()
-              for directory in (ROOT / "bindings/wasm", ROOT / "tests/query")
-              for path in directory.rglob("*") if path.is_file()}
-    if actual != TRANSFERRED:
-        raise ValueError(f"Transfer file set differs: missing={sorted(TRANSFERRED - actual)}, "
-                         f"unexpected={sorted(actual - TRANSFERRED)}")
+    if (ROOT / "bindings/wasm").exists():
+        raise ValueError("Obsolete bindings/wasm source tree remains")
+    expected = set(TRANSFERRED.values())
+    paths = [ROOT / "cmake/Wasm.cmake", ROOT / "tests/smoke.mjs"]
+    for name in ("src", "native", "examples", "tests/query"):
+        directory = ROOT / name
+        if directory.is_symlink():
+            raise ValueError(f"Symlinked transfer directory: {name}")
+        paths.extend(directory.rglob("*"))
+    if any(path.is_symlink() for path in paths):
+        raise ValueError("Symlinked transfer file")
+    actual = {path.relative_to(ROOT).as_posix() for path in paths if path.is_file()}
+    if actual != expected:
+        raise ValueError(f"Transfer file set differs: missing={sorted(expected - actual)}, "
+                         f"unexpected={sorted(actual - expected)}")
 
     def git(*args):
         return subprocess.check_output(["git", "-C", str(core_source), *args])
@@ -56,7 +65,17 @@ def verify(core_source=None):
         if (entry["owner"] != "opentlv-js" or entry["migration_destination"] != name
                 or entry["mode"] != "100644"):
             raise ValueError(f"Unexpected transfer ownership, destination or mode: {name}")
-        data = (ROOT / name).read_bytes()
+        data = (ROOT / TRANSFERRED[name]).read_bytes()
+        # Reverse only the relocated file references in two source comments.
+        comment_paths = {
+            "bindings/wasm/examples/parse.mjs": (b"cmake/Wasm.cmake", b"bindings/wasm/CMakeLists.txt"),
+            "bindings/wasm/src/opentlv_wasm.h": (b"src/opentlv.mjs", b"bindings/wasm/js/opentlv.mjs"),
+        }
+        if name in comment_paths:
+            adapted, original = comment_paths[name]
+            if data.count(adapted) != 1:
+                raise ValueError(f"Unexpected layout comment: {name}")
+            data = data.replace(adapted, original)
         if name == "bindings/wasm/src/opentlv_wasm.c":
             # Only dependency include paths change; verify all other C bytes.
             for helper in ("query_schema.h", "path_query.h"):
@@ -68,7 +87,7 @@ def verify(core_source=None):
         if name in adaptations:
             adaptation = adaptations[name]
             if (adaptation["baseline_sha256"] != entry["sha256"]
-                    or hashlib.sha256(data).hexdigest() != adaptation["adapted_sha256"]):
+                    or hashlib.sha256(data).hexdigest() != adaptation["layout_sha256"]):
                 raise ValueError(f"Unrecorded build adaptation: {name}")
             if core_source is not None:
                 baseline = git("show", f"{BASELINE}:{name}")
@@ -81,7 +100,7 @@ def verify(core_source=None):
             raise ValueError(f"Transferred bytes differ from the baseline: {name}")
         if core_source is not None and data != git("show", f"{BASELINE}:{name}"):
             raise ValueError(f"Transferred bytes differ from the Core Git object: {name}")
-    header = (ROOT / "bindings/wasm/src/opentlv_wasm.h").read_text(encoding="utf-8")
+    header = (ROOT / "native/opentlv_wasm.h").read_text(encoding="utf-8")
     declarations = [" ".join(match.split()) for match in re.findall(
         r"^OPENTLV_WASM_API\s+([^;]+);", header, re.M)]
     if declarations != inventory["bridge_declarations"]:

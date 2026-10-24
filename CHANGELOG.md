@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- Normalize the standalone layout into `src/`, `native/`, `tests/`, `examples/` and `cmake/`, with build outputs in `<build>/dist/`; preserve public imports and immutable migration provenance. (#12)
+
 ### Added
 
 - Add independent private JS package version metadata, explicit ESM/asset exports, offline archive and installed-consumer checks in every CI tier, package reproducibility and separate distribution follow-up tracking without publishing. (#11)

@@ -25,10 +25,11 @@ python -B scripts/package.py --build build-wasm --output build/package-check
 ```
 
 Use the default pinned Core build. The command verifies its live source receipt
-and rejects sibling development overrides. It checks all four nonempty outputs,
-the WASM header and wrapper equality with the current sources. These checks
-establish local package consistency, not attestation of arbitrary prebuilt
-binaries. CI builds the inputs afresh before packaging.
+and rejects sibling development overrides. It checks all four nonempty outputs
+in `<build>/dist/`, the WASM header and wrapper equality with `src/*.mjs`.
+It runs `tests/smoke.mjs` and `examples/parse.mjs` against the installed package.
+These checks establish local package consistency, not attestation of arbitrary
+prebuilt binaries. CI builds the inputs afresh before packaging.
 
 The output directory must be new. The script stages an exact file allowlist,
 generates `version.mjs` from `package.json`, and runs
