@@ -6,8 +6,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "../../common/query_schema.h"
-#include "../../common/path_query.h"
+#include "query_schema.h"
+#include "path_query.h"
 
 #include "tlv/tlv.h"
 #include "tlv/query/adapters.h"

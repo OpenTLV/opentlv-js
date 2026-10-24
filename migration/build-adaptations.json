@@ -1,0 +1,7 @@
+{
+  "bindings/wasm/CMakeLists.txt": {
+    "baseline_sha256": "82a3c37f4ff7f27cfebdd04ca9138557b157d3d7141f142141a6f509b485fd8f",
+    "adapted_sha256": "4294286e0462d313c8f29d69cdf4b42cd9a8f2a1d955335ec6882fd9ae435e79",
+    "reason": "Standalone command, public OpenTLV::tlv target and selected Core shared-helper include directory; output names, link flags and test bodies unchanged."
+  }
+}
