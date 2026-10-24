@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "component_version": "0.1.0-dev.0",
+  "examples": [
+    {
+      "feature": "ber.parse",
+      "language": "js",
+      "status": "supported",
+      "path": "examples/parse.mjs"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "repository": "https://github.com/OpenTLV/opentlv",
+  "commit": "5002c686efc49574c33de3ce3b714162f02e4632",
+  "path": "docs/development/webassembly.md",
+  "destination": "docs/webassembly.md",
+  "preserved_section": "## Use from JavaScript",
+  "adaptations": [
+    "Standalone build paths and prerequisites",
+    "Repository-owned source and Core manual links",
+    "Docs notification and existing playground producer ownership",
+    "Node test commands and package version identity"
+  ],
+  "api_section_sha256": "8d792f16a1179e91cb6a361a05250852854c27562764cd3481cb7ce7077c3db8"
+}

@@ -66,6 +66,10 @@ immutable Core inventory.
 
 ## Standalone build
 
+The [JS/WASM manual](docs/webassembly.md) contains the preserved JavaScript API,
+examples and limitations. [Documentation updates](docs/ci.md#documentation-updates)
+describes its integration with the central Docs portal.
+
 Use Emscripten **4.0.10**, Node **22**, CMake **3.24 or newer**, Python **3.9 or
 newer**, Git and Ninja. Activate the Emscripten environment and put Node 22 on
 `PATH` before configuring:
