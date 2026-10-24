@@ -1,6 +1,7 @@
 # WASM / JavaScript migration provenance
 
 Tracking: [Core #697](https://github.com/OpenTLV/opentlv/issues/697),
+[source transfer #8](https://github.com/OpenTLV/opentlv-js/issues/8),
 [epic #696](https://github.com/OpenTLV/opentlv/issues/696).
 
 ## Immutable baseline
@@ -48,12 +49,38 @@ Preserve Node smoke/example, Query facade and Emscripten public Query ABI checks
 Preserve the tag-only double-build SHA-256 comparison of all four outputs.
 The original CI executes Node, not browser/worker runtimes. Local baseline
 evidence does not establish hosted CI, tag release, standalone compatibility,
-browser behavior or npm publication. No functional sources are imported here.
+browser behavior or npm publication.
+
+## Source transfer (#8)
+
+All seven files under `bindings/wasm/` and `tests/query/wasm_facade.mjs` are
+imported byte-for-byte from the immutable baseline at their original paths.
+Their existing license notices, error handling, memory ownership, exports and
+test expectations are unchanged. Git attributes preserve LF line endings in
+these files on Windows so checkout conversion cannot invalidate their hashes.
+
+Run `python scripts/verify_migration.py` to check the exact eight-file set,
+recorded sizes, SHA-256 and Git blob hashes, ownership/destinations and all 57
+bridge declarations. The verifier uses the unchanged baseline inventory and
+requires no Core checkout. Add `--core-source ../opentlv` to also compare the
+baseline tree and source bytes with Core Git objects; the Core working tree and
+current branch are not used. This verifier intentionally describes the initial
+source transfer; later build/layout changes must record their adaptations.
+
+The transferred CMake file is not a standalone entry point. It still requires
+Core's `tlv` target and `opentlv_configure_compiler`, and the C bridge still
+includes `../../common/query_schema.h` and `../../common/path_query.h`. These
+Core-owned headers are not copied. Resolving that dependency belongs to #9.
+The Query facade runner accepts the output directory and a fixture JSON path
+as arguments; fixture generation, the shared corpus/oracle and ABI tests remain
+in Core. CI wiring belongs to #10 and manual migration to #13.
+
+Source parity does not establish standalone runtime, browser/worker, hosted CI,
+tag reproducibility or release readiness. No generated outputs are imported.
 
 ## Next work
 
 - [Workspace #42](https://github.com/OpenTLV/opentlv-workspace/issues/42): registration and sibling development.
-- [#8](https://github.com/OpenTLV/opentlv-js/issues/8): source transfer.
 - [#9](https://github.com/OpenTLV/opentlv-js/issues/9): standalone build and verified Core dependency.
 - [#10](https://github.com/OpenTLV/opentlv-js/issues/10): tests and PR/Main/Full CI.
 - [#11](https://github.com/OpenTLV/opentlv-js/issues/11): package identity; no npm publication.
