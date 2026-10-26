@@ -7,12 +7,26 @@
   "type": "module",
   "main": "./index.mjs",
   "exports": {
-    ".": { "import": "./index.mjs" },
-    "./opentlv.mjs": { "import": "./dist/opentlv.mjs" },
-    "./query.mjs": { "import": "./dist/query.mjs" },
-    "./opentlv-core.js": { "import": "./dist/opentlv-core.js" },
+    ".": {
+      "types": "./index.d.mts",
+      "import": "./index.mjs"
+    },
+    "./opentlv.mjs": {
+      "types": "./dist/opentlv.d.mts",
+      "import": "./dist/opentlv.mjs"
+    },
+    "./query.mjs": {
+      "types": "./dist/query.d.mts",
+      "import": "./dist/query.mjs"
+    },
+    "./opentlv-core.js": {
+      "import": "./dist/opentlv-core.js"
+    },
     "./opentlv-core.wasm": "./dist/opentlv-core.wasm",
-    "./version": { "import": "./version.mjs" },
+    "./version": {
+      "types": "./version.d.mts",
+      "import": "./version.mjs"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -25,10 +39,22 @@
     "package-info.json",
     "README.md",
     "CHANGELOG.md",
-    "LICENSE"
+    "LICENSE",
+    "index.d.mts",
+    "version.d.mts",
+    "dist/opentlv.d.mts",
+    "dist/query.d.mts"
   ],
-  "engines": { "node": "22.x" },
-  "repository": { "type": "git", "url": "https://github.com/OpenTLV/opentlv-js.git" },
-  "bugs": { "url": "https://github.com/OpenTLV/opentlv-js/issues" },
-  "homepage": "https://github.com/OpenTLV/opentlv-js#readme"
+  "engines": {
+    "node": "22.x"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/OpenTLV/opentlv-js.git"
+  },
+  "bugs": {
+    "url": "https://github.com/OpenTLV/opentlv-js/issues"
+  },
+  "homepage": "https://github.com/OpenTLV/opentlv-js#readme",
+  "types": "./index.d.mts"
 }

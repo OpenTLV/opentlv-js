@@ -7,7 +7,9 @@ This versioned register tracks the scope without creating remote issues or
 claiming publication readiness. Each item needs a separately approved
 implementation before the private-package restriction can change.
 
-Reviewed for #14 on 2026-10-26: all items remain open. The
+Reviewed for #14 on 2026-10-26: publication items remain open. Issue #5 adds
+TypeScript declarations and installed consumer checks; runtime distribution
+items below remain open. The
 [migration assessment](../MIGRATION.md#validation-review-14) records compatibility
 and the outstanding coordinated gates; local archive validation does not
 complete any publication item.
@@ -39,7 +41,7 @@ complete any publication item.
 
 - Validate browsers, workers, bundlers and asset URL deployment before claiming
   those package environments are supported.
-- Decide CDN/static hosting, source maps, TypeScript declarations and any
+- Decide CDN/static hosting, source maps and any
   additional module interfaces based on tested consumer requirements.
 - Keep wrapper semantics, Core ownership and WASM memory/lifetime contracts;
   coordinate API coverage with [#1](https://github.com/OpenTLV/opentlv-js/issues/1)
@@ -52,5 +54,5 @@ complete any publication item.
   dependency/runtime change requires it, preserving the immutable baseline and
   adding evidence for the new compatibility contract.
 - Keep API redesign and broader facade coverage separate from the migration's
-  behavior-preservation result; TypeScript and browser/worker coverage remain
-  tracked under DIST-1.
+  behavior-preservation result; browser/worker coverage remains tracked under
+  DIST-1. TypeScript declarations were added separately in #5.

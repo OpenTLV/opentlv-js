@@ -77,7 +77,8 @@ Reviewed against JS source `72338d8` and locked Core
 adapters. Comments and C literals do not count. Docs, tests, generated output,
 dependency sources and migration inventories are outside these patterns.
 `src/*.mjs` calls the separate `opentlv_wasm_*` bridge namespace and contributes
-no direct Core symbol references; TypeScript declarations do not yet exist.
+no direct Core symbol references. TypeScript declarations added in #5 are also
+outside this lexical native-symbol inventory.
 
 | Scope | All symbols | Referenced | Missing | Ignored |
 | --- | ---: | ---: | ---: | ---: |
@@ -349,3 +350,44 @@ the pin PR, hosted checks and publication require their own evidence. Local test
 mock delivery and do not configure secrets or publish. Release/tag workflows do
 not send this documentation notification. The portal's existing playground
 binary producer remains separate from this documentation handoff.
+
+## Document/Query/Schema inventory (#5)
+
+The issue #5 inventory uses Core `a9a6f9470c2b285744738b40196bef9d0341fead`.
+The initial gaps were 21 Document, four compiled Query, three legacy Query and
+ten structural Schema functions. The implementation now references 37/41
+Document functions, 28/31 compiled Query functions, 6/10 legacy Query functions
+and 7/10 structural Schema functions. Remaining functions in those headers have
+explicit equivalent-operation or ownership exclusions in `cmake/api-coverage.json`.
+The informational generic inventory is 167 references, 72 missing and 58 reviewed
+exclusions out of 297 symbols. Builtins stays separate and unchanged.
+
+Document adds empty construction, bounded parse, insertion, lookup, alternate
+encoding, source locations, revisions, value measurement and an owned incremental
+builder. Query adds contextual Document evaluation and convenience editing,
+retaining native execution, bindings, events, scalar results and diagnostics.
+Schema adds prepared immutable definitions, nested/recursive tables, occurrence
+and group constraints, ordering, length policies and bounded diagnostic reports.
+
+Unreferenced C aliases use the diagnostic/checked/explicit-format variants already
+bound. Native visitor functions map to owned compiled execution and synchronous
+JS visitation. Raw plan pointer views and V1 borrowed-pointer rebinding are
+intentionally excluded. Query codec/definition adapters, Schema number codecs,
+value constraints, generic codecs and Generator remain visible gaps for the
+separate roadmap work; no Builtins parity claim is made. A whole-stream builder
+reference does not imply support for the native borrowed-reader/subtree mode.
+
+CTest and installed-package checks execute `tests/document_schema.mjs` and
+`examples/document_schema.mjs`. Regressions cover stale/foreign Nodes, mutation
+revisions, source locations, context, capacity retry, callback guards, deep value
+measurement, builder suspension, recursive/group/ordered Schema validation,
+copied diagnostics and WASM memory growth. `tests/types.mts` checks the installed
+15-file archive with pinned TypeScript 5.9.3 in strict NodeNext and Bundler modes.
+Put that compiler's `tsc` on PATH for local package/CI checks; the hosted workflow
+installs it before the WASM job. Runtime package installation remains offline.
+
+Source evolution separately verifies the changed sources and restores the immutable
+migration baseline. Release-tier
+validation still compares the reconstructed baseline's four runtime outputs and
+the current private archives from two independent builds. Local Node and type
+checks do not establish hosted, browser/worker, publication or release evidence.

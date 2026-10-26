@@ -86,3 +86,24 @@ if(OPENTLV_BUILD_WASM_TESTS AND OPENTLV_NODE_EXECUTABLE)
         PROPERTIES LABELS "integration;wasm")
 endif()
 # END streaming #4
+
+# BEGIN document-schema #5
+set_property(TARGET opentlv-wasm APPEND PROPERTY LINK_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/opentlv.d.mts"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/query.d.mts")
+add_custom_command(TARGET opentlv-wasm POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/opentlv.d.mts" "${_wasm_output_dir}/opentlv.d.mts"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/query.d.mts" "${_wasm_output_dir}/query.d.mts"
+    VERBATIM)
+target_sources(opentlv-wasm PRIVATE native/document_schema.h)
+if(OPENTLV_BUILD_WASM_TESTS AND OPENTLV_NODE_EXECUTABLE)
+    add_test(NAME Integration_wasm_document_schema
+        COMMAND ${OPENTLV_NODE_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tests/document_schema.mjs" "${_wasm_output_dir}")
+    add_test(NAME Integration_example_wasm_document_schema
+        COMMAND ${OPENTLV_NODE_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/examples/document_schema.mjs" "${_wasm_output_dir}")
+    set_tests_properties(Integration_wasm_document_schema Integration_example_wasm_document_schema
+        PROPERTIES LABELS "integration;wasm")
+endif()
+# END document-schema #5

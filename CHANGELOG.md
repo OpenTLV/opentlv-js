@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Complete owned Document construction, insertion, lookup, source locations, encoding and incremental building; add contextual Query evaluation/editing, structural Schema validation with copied reports, TypeScript package declarations and binding/consumer regressions. (#5)
 - Expose owned Reader/Writer and tree streaming APIs with incremental windows, resumable visitors, balanced events, bounded output, exact tree measurement, structured diagnostics and binding/package regressions. (#4)
 - Expose owned generic field encodings, mixed/tag-only, Variable, Escaped and Packed Format composition, direct decode/measure/encode/preserve operations and binding regressions; retain immutable migration provenance separately from reviewed API additions. (#3)
 - Report exact pinned Core API symbol references in CI, with separate generic/Builtins inventories, per-header gaps, justified exclusions and PR Core-pin diffs; keep coverage informational. (#2)

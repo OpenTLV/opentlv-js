@@ -1,7 +1,10 @@
 {
   "schema": 1,
   "lock": "cmake/core-source.json",
-  "references": ["native/*.c", "native/*.h"],
+  "references": [
+    "native/*.c",
+    "native/*.h"
+  ],
   "ignore": [
     {
       "reason": "Reader.read/next use the source-and-diagnostic variants, which include the same semantic result, consumed extent and failure detail. The convenience and no-diagnostic variants do not add a separate JS operation.",
@@ -30,6 +33,34 @@
     {
       "reason": "Binary composition callbacks are reached through Format.fixed. Tagged binary composition is covered by Format.compose with fixed identifier/length fields and tag_only; the specialized initializer and callbacks provide no additional public operation.",
       "symbols": ["tlv_binary_decode", "tlv_binary_measure", "tlv_binary_encode", "tlv_tagged_binary_format_init", "tlv_tagged_binary_decode", "tlv_tagged_binary_measure", "tlv_tagged_binary_encode"]
+    },
+    {
+      "reason": "Node.encode/encodedSize call the _as variants with the retained Document Format when no alternate Format is supplied; the implicit-format aliases add no behavior.",
+      "symbols": ["tlv_node_encode", "tlv_node_encoded_size"]
+    },
+    {
+      "reason": "Document Query visitation uses compiled evaluation plus query_next and JS-owned synchronous visit guards. V1 path visitation is available by compiling the formatted V1Query; native visitor entry points are not separate JS operations.",
+      "symbols": ["tlv_document_query_program_visit", "tlv_document_query_visit", "tlv_query_visit", "tlv_query_visit_buffer"]
+    },
+    {
+      "reason": "Schema construction prepares and checks the immutable owned definition once; validate and validateAll use checked variants with the same Core semantics and copied diagnostics.",
+      "symbols": ["tlv_schema_check", "tlv_schema_validate", "tlv_schema_validate_all_diag"]
+    },
+    {
+      "reason": "QueryProgram owns measured compilation storage and uses the diagnostic compile variant; raw scratch allocation and no-diagnostic compilation are C storage/convenience interfaces.",
+      "symbols": ["tlv_query_compile", "tlv_query_compile_scratch"]
+    },
+    {
+      "reason": "QueryExecution.reset recreates its native execution in retained owned storage and releases pinned input and Document references. The C reset alias does not add a public operation.",
+      "symbols": ["tlv_query_exec_reset"]
+    },
+    {
+      "reason": "V1Query owns its native parsed path and matcher at stable addresses; matcher() creates an independent continuation. Rebinding a borrowed C query pointer is not exposed across WASM.",
+      "symbols": ["tlv_query_matcher_rebind"]
+    },
+    {
+      "reason": "Raw relocatable-plan views expose borrowed C pointers and layout internals. QueryProgram.load/image/info/explain provide validated owned image access; direct plan inspection is intentionally excluded.",
+      "symbols": ["tlv_query_plan_open", "tlv_query_plan_info"]
     }
   ]
 }

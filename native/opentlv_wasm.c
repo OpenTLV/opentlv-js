@@ -963,6 +963,7 @@ static void query_status(builder_t* b, tlv_result_t code, const tlv_query_diagno
     /* Related span only: an expression span that is primary is already "location". */
     write_named_location(b, "expression", d ? &d->expression : NULL);
     if (d) {
+        builder_text(b, ",\"cause\":"); builder_json_string(b, tlv_query_cause_string(d->cause));
         builder_text(b, ",\"configured\":");
         builder_number(b, d->configured);
         if (d->limit) {
@@ -1714,8 +1715,8 @@ const char* opentlv_wasm_document_encode(opentlv_wasm_document_t* doc) {
     free(data);
     return query_reply(b);
 }
-const char* opentlv_wasm_execution_document(opentlv_wasm_execution_t* q,
-                                            opentlv_wasm_document_t* doc, size_t capacity) {
+static const char* wasm_execution_document_context(opentlv_wasm_execution_t* q,
+    opentlv_wasm_document_t* doc, size_t capacity, const tlv_node_t* context) {
     tlv_query_diagnostic_t d = {0};
     tlv_result_t           rc = TLV_ERR_UNSUPPORTED;
 #if OPENTLV_DOCUMENT
@@ -1742,7 +1743,7 @@ const char* opentlv_wasm_execution_document(opentlv_wasm_execution_t* q,
         q->document = doc;
         ++doc->references;
         rc = tlv_document_query_evaluate(
-            doc->document, q->exec, NULL, q->values,
+            doc->document, q->exec, context, q->values,
             q->program->info.constructed_values_required ? capacity : 0,
             q->program->info.constructed_values_required ? &staging : NULL, &d);
     }
@@ -1755,6 +1756,10 @@ const char* opentlv_wasm_execution_document(opentlv_wasm_execution_t* q,
 #endif
     query_status(&q->reply, rc, &d);
     return query_reply(&q->reply);
+}
+const char* opentlv_wasm_execution_document(opentlv_wasm_execution_t* q,
+                                            opentlv_wasm_document_t* doc, size_t capacity) {
+    return wasm_execution_document_context(q, doc, capacity, NULL);
 }
 const char* opentlv_wasm_execution_edit(opentlv_wasm_execution_t* q, int kind, const uint8_t* tag,
                                         size_t tag_size, const uint8_t* value, size_t value_size,
@@ -1851,3 +1856,6 @@ const char* opentlv_wasm_document_node(opentlv_wasm_document_t* doc, size_t addr
 
 /* Post-migration Reader/Writer boundary. */
 #include "streaming.h"
+
+/* Post-migration Document/Schema boundary. */
+#include "document_schema.h"

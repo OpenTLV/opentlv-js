@@ -40,7 +40,12 @@ export function queryFacade(wasm) {
         }
       }
     }
-    if (reply.code && !(allowEnd && reply.code === END)) throw new QueryError(reply.code, reply.query, reply.applied, reply.rule, reply.schema, reply.location, reply.message);
+    if (reply.code && !(allowEnd && reply.code === END)) {
+      const error = new QueryError(reply.code, reply.query, reply.applied, reply.rule, reply.schema, reply.location, reply.message);
+      if (reply.diagnostic) error.diagnostic = reply.diagnostic;
+      if (reply.reader) error.reader = reply.reader;
+      throw error;
+    }
     return reply;
   }
   function bytes(value) {
@@ -827,12 +832,15 @@ export function queryFacade(wasm) {
   }
   class QueryExecution {
     constructor(program, { max_depth = 64, max_nodes = 1024, max_work = 100000000, retained = true } = {}) {
+      if (!(program instanceof QueryProgram)) throw new TypeError("QueryProgram from this module required");
+      program._check();
       this._program = program;
       this._pointer = wasm._opentlv_wasm_execution_new(program._pointer,
         size(max_depth), size(max_nodes), size(max_work), Number(Boolean(retained)));
       if (!this._pointer) response(wasm._opentlv_wasm_program_render(program._pointer, -1));
       ++program._references;
       this._maxNodes = max_nodes;
+      this._maxDepth = max_depth;
       this._busy = false;
       this._invalid = false;
       this._document = null;
@@ -846,10 +854,11 @@ export function queryFacade(wasm) {
       return this._native(() => wasm._opentlv_wasm_execution_operation(this._pointer, operation, size(argument)), allowEnd);
     }
     _native(run, allowEnd = false) {
-      return this._program._native(() => {
+      this._busy = true;
+      try { return this._program._native(() => {
         try { return response(run(), allowEnd); }
         finally { if (this._program._providerFailed || this._program._formatOwner._failed) this._invalid = true; }
-      });
+      }); } finally { this._busy = false; }
     }
     close() {
       if (this._busy || this._program._providerActive || this._program._formatOwner._active) throw new QueryError(INVALID_STATE);
@@ -927,19 +936,28 @@ export function queryFacade(wasm) {
         const match = this.next();
         if (match === null) return;
         this._busy = true;
+        if (this._document) ++this._document._active;
         let action;
         try { action = callback(match); }
         catch (error) { this._invalid = true; throw error; }
-        finally { this._busy = false; }
+        finally { this._busy = false; if (this._document) --this._document._active; }
         if (action === false) return;
       }
     }
-    evaluateDocument(document, { value_capacity = document._inputSize } = {}) {
+    evaluateDocument(document, { value_capacity = null, context = null } = {}) {
       this._check();
       if (!(document instanceof Document)) throw new TypeError("Document required");
       document._check();
+      if (document._active) throw new QueryError(INVALID_STATE);
+      this._busy = true;
+      try {
+        if (value_capacity === null) value_capacity = this._program.info.constructed_values_required
+          ? document.queryValueSize(this._maxDepth) : 0;
+      } finally { this._busy = false; }
+      const [address, identity] = documentNode(document, context);
       ++document._active;
-      try { this._native(() => wasm._opentlv_wasm_execution_document(this._pointer, document._pointer, size(value_capacity))); }
+      try { temporary(string(identity), id => this._native(() => wasm._opentlv_wasm_execution_document_context(
+        this._pointer, document._pointer, size(value_capacity), address, id))); }
       finally { --document._active; }
       this._document = document;
       return this;
@@ -950,22 +968,27 @@ export function queryFacade(wasm) {
       if (!this._document || !Object.hasOwn(kinds, kind)) throw new TypeError("Document selection and remove/replace/insert_after required");
       if (this._document._active) throw new QueryError(INVALID_STATE);
       bytes(tag); bytes(value);
-      return temporary(tag, tagPointer => temporary(value, valuePointer => this._native(() =>
+      ++this._document._active;
+      try { return temporary(tag, tagPointer => temporary(value, valuePointer => this._native(() =>
         wasm._opentlv_wasm_execution_edit(this._pointer, kinds[kind], tagPointer, tag.length,
-          valuePointer, value.length, size(target_capacity))))).applied;
+          valuePointer, value.length, size(target_capacity))))).applied; }
+      finally { --this._document._active; }
     }
     *[Symbol.iterator]() { for (let node = this.next(); node !== null; node = this.next()) yield node; }
   }
   class Document {
-    constructor(input, { format = "ber", retain_source_locations = false } = {}) {
+    constructor(input, { format = "ber", retain_source_locations = false, max_depth = 64, max_elements = 65536 } = {}) {
+      const empty = input === null;
+      if (empty) input = new Uint8Array();
       bytes(input);
+      const config = pointers([size(max_depth), size(max_elements), flag(retain_source_locations), Number(empty)]);
       const program = new QueryProgram("//*", { format });
       this._program = program;
       this._pointer = 0;
       try {
         program._native(() => {
-          this._pointer = temporary(input, pointer => wasm._opentlv_wasm_document_new(
-            program._pointer, pointer, input.length, retain_source_locations ? 1 : 0));
+          this._pointer = temporaries([input, config], ([pointer, options]) => wasm._opentlv_wasm_document_create(
+            program._pointer, pointer, input.length, options));
           if (!this._pointer) response(wasm._opentlv_wasm_program_render(program._pointer, -1));
         });
         ++program._references;
@@ -985,8 +1008,10 @@ export function queryFacade(wasm) {
     _node(node, operation, data = new Uint8Array()) {
       this._check();
       if (this._active && (operation === 4 || operation === 5)) throw new QueryError(INVALID_STATE);
-      return this._program._native(() => temporary(string(node?.identity ?? "0"), identity => temporary(data, pointer =>
-        response(wasm._opentlv_wasm_document_node(this._pointer, node?._address ?? 0, identity, operation, pointer, data.length)).value)));
+      ++this._active;
+      try { return this._program._native(() => temporary(string(node?.identity ?? "0"), identity => temporary(data, pointer =>
+        response(wasm._opentlv_wasm_document_node(this._pointer, node?._address ?? 0, identity, operation, pointer, data.length)).value))); }
+      finally { --this._active; }
     }
     get first() { const value = this._node(null, 0); return value ? new Node(this, value) : null; }
     encode() {
@@ -1008,7 +1033,218 @@ export function queryFacade(wasm) {
     setValue(value) { this._document._node(this, 4, bytes(value)); }
     erase() { this._get(5); }
   }
-  return { Reader, TreeReader, Writer, TreeWriter, StreamError, StreamResult, Visit, QueryProgram, QueryExecution, QuerySchema, QueryError, Document, Node, Format, Field, FormatError, V1Query, nameResolver, definitionResolver,
+  // BEGIN document-schema #5
+  function dsReply(pointer, report = false) {
+    if (!pointer) throw new QueryError(OUT_OF_MEMORY);
+    try {
+      const reply = JSON.parse(wasm.UTF8ToString(pointer));
+      if (reply.code && !report) {
+        const error = new QueryError(reply.code);
+        Object.assign(error, reply.detail ?? reply);
+        throw error;
+      }
+      return reply;
+    } finally { wasm._opentlv_wasm_free(pointer); }
+  }
+  function documentNode(document, node) {
+    if (node === null) return [0, "0"];
+    if (!(node instanceof Node) || node._document !== document) throw new TypeError("Node from this Document required");
+    return [node._address, node.identity];
+  }
+  Document.create = options => new Document(null, options);
+  Document.prototype._operation = function(operation, { node = null, before = null,
+    tag = new Uint8Array(), value = new Uint8Array(), format = null } = {}) {
+    this._check();
+    if (this._active) throw new QueryError(INVALID_STATE);
+    const [address, id] = documentNode(this, node), [other, otherId] = documentNode(this, before);
+    bytes(tag); bytes(value);
+    const target = format === null ? null : new QueryProgram("//*", { format });
+    ++this._active;
+    try {
+      const run = () => temporaries([pointers([operation, address, other]), string(id), string(otherId), tag, value],
+        ([config, identity, otherIdentity, t, v]) => dsReply(wasm._opentlv_wasm_document_operation(
+          this._pointer, config, identity, otherIdentity, t, tag.length, v, value.length, target?._pointer ?? 0)));
+      return this._program._native(() => target ? target._native(run) : run());
+    } finally { --this._active; target?.close(); }
+  };
+  Object.defineProperties(Document.prototype, {
+    count: { get() { return this._operation(0).count; } },
+    revision: { get() { return BigInt.asUintN(64, BigInt(this._operation(0).revision)); } },
+    retireEpoch: { get() { return BigInt.asUintN(64, BigInt(this._operation(0).retireEpoch)); } },
+  });
+  Document.prototype.insert = function(tag, value = new Uint8Array(), { parent = null, before = null } = {}) {
+    return new Node(this, this._operation(1, { node: parent, before, tag, value }).node);
+  };
+  Document.prototype.find = function(tag, parent = null) {
+    const found = this._operation(2, { node: parent, tag }).node;
+    return found ? new Node(this, found) : null;
+  };
+  Document.prototype.findPath = function(path) {
+    if (typeof path !== "string") throw new TypeError("Query path string required");
+    const found = this._operation(4, { value: encoder.encode(path) }).node;
+    return found ? new Node(this, found) : null;
+  };
+  Document.prototype.encodedSize = function(format = null) { return this._operation(6, { format }).size; };
+  Document.prototype.encodeAs = function(format) { return unhex(this._operation(7, { format }).bytes); };
+  Document.prototype.queryValueSize = function(max_depth = 64) {
+    this._check(); if (this._active) throw new QueryError(INVALID_STATE);
+    ++this._active;
+    try { return this._program._native(() => dsReply(wasm._opentlv_wasm_document_query_size(this._pointer, size(max_depth))).size); }
+    finally { --this._active; }
+  };
+  Object.defineProperties(Node.prototype, {
+    nextSameTag: { get() {
+      const found = this._document._operation(3, { node: this }).node;
+      return found ? new Node(this._document, found) : null;
+    } },
+    sourceLocation: { get() { return Object.freeze(this._document._operation(5, { node: this }).location); } },
+  });
+  Node.prototype.encodedSize = function(format = null) { return this._document._operation(6, { node: this, format }).size; };
+  Node.prototype.encode = function(format = null) { return unhex(this._document._operation(7, { node: this, format }).bytes); };
+  QueryProgram.prototype.evaluateDocument = function(document, { bindings = {}, ...options } = {}) {
+    const execution = this.execution(options);
+    try {
+      for (const [name, value] of Object.entries(bindings)) execution.bind(name, value);
+      execution.evaluateDocument(document, options);
+      return this.info.result_kind ? execution.result() : [...execution];
+    } finally { execution.close(); }
+  };
+  QueryProgram.prototype.editDocument = function(document, kind, { bindings = {}, ...options } = {}) {
+    const execution = this.execution(options);
+    try {
+      for (const [name, value] of Object.entries(bindings)) execution.bind(name, value);
+      execution.evaluateDocument(document, options);
+      return execution.editDocument(kind, options);
+    } finally { execution.close(); }
+  };
+  class DocumentBuilder {
+    #reader; #program; #pointer = 0; #busy = false; #done = false;
+    constructor(input = new Uint8Array(), { format = "ber", max_depth = 64, max_elements = 65536,
+      retain_source_locations = false, ...options } = {}) {
+      bytes(input);
+      const own = !(format instanceof Format), owner = own ? new Format(format) : format;
+      try {
+        this.#reader = new TreeReader(input, { ...options, format: owner, max_depth, max_elements });
+        this.#program = new QueryProgram("//*", { format: owner });
+        this.#pointer = temporary(pointers([size(max_depth), size(max_elements), flag(retain_source_locations)]), config =>
+          created(error => wasm._opentlv_wasm_document_builder_new(this.#program._pointer,
+            streamState.get(this.#reader).pointer, config, error)));
+      } catch (error) { this.#reader?.close(); this.#program?.close(); throw error; }
+      finally { if (own) owner.close(); }
+    }
+    #check() {
+      if (!this.#pointer || this.#busy || this.#done || this.#program._formatOwner._active) throw new QueryError(INVALID_STATE);
+    }
+    setInput(input, options) { this.#check(); this.#reader.setInput(input, options); return this; }
+    get state() { this.#check(); return this.#reader.state; }
+    consume() {
+      this.#check(); this.#busy = true;
+      let reply;
+      try {
+        this.#program._native(() => { reply = streamReply(wasm._opentlv_wasm_document_builder_consume(this.#pointer)); });
+        if (reply.status !== "ok") return { status: reply.status, document: null };
+        const document = Object.create(Document.prototype);
+        document._pointer = reply.document; document._program = this.#program;
+        document._active = 0; document._inputSize = 0; ++this.#program._references;
+        this.#done = true;
+        return { status: "ok", document };
+      } catch (error) {
+        if (reply?.document) wasm._opentlv_wasm_document_free(reply.document);
+        this.#done = true; throw error;
+      } finally { this.#busy = false; }
+    }
+    close() {
+      if (this.#busy || this.#program?._formatOwner._active) throw new QueryError(INVALID_STATE);
+      if (this.#pointer) wasm._opentlv_wasm_document_builder_free(this.#pointer);
+      this.#pointer = 0; this.#reader?.close(); this.#program?.close();
+    }
+  }
+  class SchemaError extends Error {
+    constructor(reply) {
+      super(wasm.UTF8ToString(wasm._opentlv_wasm_strerror(reply.code)));
+      Object.assign(this, reply.detail); this.code = reply.code;
+      this.diagnostics = reply.diagnostics ?? [];
+      this.schema = reply.detail?.schema ?? null;
+    }
+  }
+  class Schema {
+    #pointer = 0; #owner; #busy = false; #entries = []; #tables = [];
+    constructor(definition, { format = "ber" } = {}) {
+      const tables = [], rules = [], groups = [], buffers = [], seen = new Map();
+      const put = data => { buffers.push(data); return buffers.length - 1; };
+      const visit = table => {
+        if (!table || typeof table !== "object" || !Array.isArray(table.rules)) throw new TypeError("Schema table with rules required");
+        if (seen.has(table)) return seen.get(table);
+        if (tables.length === 256) throw new RangeError("at most 256 Schema tables");
+        const index = tables.length; seen.set(table, index); tables.push(null);
+        const start = rules.length, groupStart = groups.length;
+        const order = { any: 0, sequence: 1 }[table.order ?? "any"];
+        if (order === undefined) throw new TypeError("any or sequence order required");
+        for (const r of table.rules) {
+          const kind = { any: 0, primitive: 1, constructed: 2 }[r.kind ?? "any"];
+          if (kind === undefined) throw new TypeError("invalid Schema kind");
+          const entry = { tag: bytes(r.tag).slice(), name: r.name ?? "", min_length: size(r.min_length ?? 0),
+            max_length: size(r.max_length ?? 0xffffffff), length_multiple: size(r.length_multiple ?? 0),
+            endpoints: r.endpoints ?? false };
+          this.#entries.push(entry);
+          rules.push([put(entry.tag), entry.tag.length, put(string(entry.name)), entry.min_length, entry.max_length,
+            flag(entry.endpoints), entry.length_multiple, size(r.min_occurs ?? 0), size(r.max_occurs ?? 1), kind, 0, size(r.group ?? 0)]);
+        }
+        for (const g of table.groups ?? []) groups.push([size(g.id), size(g.min_occurs ?? 0), size(g.max_occurs ?? 1), put(string(g.name ?? ""))]);
+        tables[index] = [start, table.rules.length, groupStart, groups.length - groupStart, flag(table.allow_unknown ?? false), order];
+        table.rules.forEach((r, i) => { if (r.children) rules[start + i][10] = visit(r.children) + 1; });
+        return index;
+      };
+      visit(definition); this.#tables = tables;
+      this.#owner = new QueryProgram("//*", { format });
+      try {
+        temporaries(buffers, pointersToData => {
+          const nativeRules = rules.map(r => r.map((v, i) => i === 0 || i === 2 ? pointersToData[v] : v));
+          const nativeGroups = groups.map(g => g.map((v, i) => i === 3 ? pointersToData[v] : v));
+          temporaries([pointers(tables.flat()), pointers(nativeRules.flat()), pointers(nativeGroups.flat())], ([t, r, g]) => {
+            const reply = dsReply(wasm._opentlv_wasm_structure_new(t, tables.length, r, rules.length, g, groups.length), true);
+            if (reply.code) throw new SchemaError(reply);
+            this.#pointer = reply.schema;
+          });
+        });
+      } catch (error) { this.#owner.close(); throw error; }
+    }
+    #check() { if (!this.#pointer || this.#busy || this.#owner._formatOwner._active) throw new QueryError(INVALID_STATE); }
+    close() {
+      if (this.#busy || this.#owner._formatOwner._active) throw new QueryError(INVALID_STATE);
+      if (this.#pointer) wasm._opentlv_wasm_structure_free(this.#pointer);
+      this.#pointer = 0; this.#owner.close();
+    }
+    #validate(input, all, { max_depth = 64, max_elements = 65536, capacity = 64, unknown = "schema" } = {}) {
+      this.#check(); bytes(input);
+      const policy = { schema: 0, allow: 1, reject: 2 }[unknown];
+      if (policy === undefined) throw new TypeError("schema, allow or reject unknown policy required");
+      const config = pointers([size(max_depth), size(max_elements), Number(all), size(capacity), policy]);
+      this.#busy = true;
+      try {
+        const reply = this.#owner._native(() => temporaries([input, config], ([data, p]) =>
+          dsReply(wasm._opentlv_wasm_structure_validate(this.#pointer, this.#owner._pointer, data, input.length, p), true)));
+        if (reply.code) throw new SchemaError(reply);
+        return reply.diagnostics;
+      } finally { this.#busy = false; }
+    }
+    validate(input, options) { this.#validate(input, false, options); }
+    validateAll(input, options) { return this.#validate(input, true, options); }
+    find(tag, table = 0) {
+      this.#check(); bytes(tag); size(table);
+      if (table >= this.#tables.length) throw new RangeError("Schema table index out of range");
+      const reply = temporary(tag, p => dsReply(wasm._opentlv_wasm_structure_find(this.#pointer, table, p, tag.length, 0, 0)));
+      if (reply.index === null) return null;
+      const entry = this.#entries[reply.index]; return { ...entry, tag: entry.tag.slice() };
+    }
+    validateLength(tag, length, table = 0) {
+      this.#check(); bytes(tag); size(table); size(length);
+      if (table >= this.#tables.length) throw new RangeError("Schema table index out of range");
+      temporary(tag, p => dsReply(wasm._opentlv_wasm_structure_find(this.#pointer, table, p, tag.length, length, 1)));
+    }
+  }
+  // END document-schema #5
+  return { Schema, SchemaError, DocumentBuilder, Reader, TreeReader, Writer, TreeWriter, StreamError, StreamResult, Visit, QueryProgram, QueryExecution, QuerySchema, QueryError, Document, Node, Format, Field, FormatError, V1Query, nameResolver, definitionResolver,
     compileQuery: (text, options) => new QueryProgram(text, options),
     loadQuery: (image, options) => QueryProgram.load(image, options),
     querySchema: (rules, options) => new QuerySchema(rules, options),

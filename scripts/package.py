@@ -15,15 +15,16 @@ import tarfile
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUTS = ("opentlv-core.js", "opentlv-core.wasm", "opentlv.mjs", "query.mjs")
 EXPORTS = {
-    ".": {"import": "./index.mjs"},
-    "./opentlv.mjs": {"import": "./dist/opentlv.mjs"},
-    "./query.mjs": {"import": "./dist/query.mjs"},
+    ".": {"types": "./index.d.mts", "import": "./index.mjs"},
+    "./opentlv.mjs": {"types": "./dist/opentlv.d.mts", "import": "./dist/opentlv.mjs"},
+    "./query.mjs": {"types": "./dist/query.d.mts", "import": "./dist/query.mjs"},
     "./opentlv-core.js": {"import": "./dist/opentlv-core.js"},
     "./opentlv-core.wasm": "./dist/opentlv-core.wasm",
-    "./version": {"import": "./version.mjs"},
+    "./version": {"types": "./version.d.mts", "import": "./version.mjs"},
     "./package.json": "./package.json",
 }
-FILES = {"package.json", "index.mjs", "version.mjs", "package-info.json",
+DECLARATIONS = ("index.d.mts", "version.d.mts", "dist/opentlv.d.mts", "dist/query.d.mts")
+FILES = {*DECLARATIONS, "package.json", "index.mjs", "version.mjs", "package-info.json",
          "README.md", "CHANGELOG.md", "LICENSE", *(f"dist/{name}" for name in OUTPUTS)}
 # SemVer numeric prerelease identifiers must not have leading zeroes.
 NUMBER = r"(?:0|[1-9][0-9]*)"
@@ -55,9 +56,11 @@ def metadata(root=ROOT):
         raise ValueError("Package file allowlist differs from the distribution contract")
     if data.get("license") != "MIT" or data.get("engines") != {"node": "22.x"}:
         raise ValueError("Package license or tested Node version differs")
+    if data.get("types") != "./index.d.mts":
+        raise ValueError("Package type entry differs")
     forbidden = {"scripts", "dependencies", "devDependencies", "optionalDependencies",
                  "peerDependencies", "bundledDependencies", "bundleDependencies",
-                 "publishConfig", "workspaces", "types", "typings", "bin"}
+                 "publishConfig", "workspaces", "typings", "bin"}
     if forbidden.intersection(data):
         raise ValueError("Package must not introduce hooks, dependencies, publication or unsupported APIs")
     return data
@@ -84,6 +87,11 @@ def stage(dist, selection, destination, root=ROOT):
     for name in ("README.md", "CHANGELOG.md", "LICENSE"):
         source = root / "packaging/README.md" if name == "README.md" else root / name
         payload[name] = read_file(source)
+    for name in DECLARATIONS:
+        source = root / "src" / Path(name).name if name.startswith("dist/") else root / "packaging" / name
+        payload[name] = read_file(source)
+        if name.startswith("dist/") and read_file(dist / Path(name).name) != payload[name]:
+            raise ValueError(f"Stale or modified type declaration: {name}")
     info = dict(schema=1, name=data["name"], version=data["version"], release_verified=False,
                 core={key: selection[key] for key in
                       ("repository", "commit", "tree", "source_sha256", "version_inputs")},
@@ -169,6 +177,17 @@ def check(build, output):
         runner.run("installed-fields-example", "node", ROOT / "examples/fields.mjs", installed / "dist")
         runner.run("installed-streaming", "node", ROOT / "tests/streaming.mjs", installed / "dist")
         runner.run("installed-streaming-example", "node", ROOT / "examples/streaming.mjs", installed / "dist")
+        runner.run("installed-document-schema", "node", ROOT / "tests/document_schema.mjs", installed / "dist")
+        runner.run("installed-document-schema-example", "node", ROOT / "examples/document_schema.mjs", installed / "dist")
+        tsc = shutil.which("tsc")
+        if tsc is None:
+            raise ValueError("TypeScript 5.9.3 tsc is required for installed-package checks")
+        if runner.run("typescript-version", tsc, "--version").strip() != "Version 5.9.3":
+            raise ValueError("Installed-package type checks require TypeScript 5.9.3")
+        shutil.copyfile(ROOT / "tests/types.mts", consumer / "types.mts")
+        for mode, resolution in (("NodeNext", "NodeNext"), ("ESNext", "Bundler")):
+            runner.run(f"types-{resolution}", tsc, "--strict", "--noEmit", "--target", "ES2022",
+                       "--module", mode, "--moduleResolution", resolution, consumer / "types.mts")
         if ci.read_selection(build) != selection:
             raise ValueError("Core selection changed during package checks")
         report.update(status="passed", version=metadata()["version"], files=hashes,

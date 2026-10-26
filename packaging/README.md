@@ -36,8 +36,10 @@ The package root exports `loadOpenTLV`, `hexToBytes`, `FORMATS`, `MODULES` and
 | `opentlv-js/version` | Independent `packageVersion` constant |
 | `opentlv-js/package.json` | Package metadata |
 
-ESM is the supported module interface. There are no CommonJS entry points or
-TypeScript declarations. The tested runtime is Node 22. The generated loader
+ESM is the supported module interface. There are no CommonJS entry points.
+TypeScript declarations cover the loaded API, including Document, Query and
+Schema; strict installed consumers are checked with TypeScript 5.9.3.
+The tested runtime is Node 22. The generated loader
 retains web/worker/Node flags, but this package check does not establish browser,
 worker or bundler compatibility.
 

@@ -1,13 +1,33 @@
 {
   "schema": 1,
-  "reason": "Post-migration issues #3 and #4. Preserve immutable migration records and verify current sources plus reversible additions separately.",
+  "reason": "Post-migration issues #3, #4 and #5; preserve immutable sources with separately verified additions.",
   "baseline_js_commit": "9f95ea12facc7a76751119b2f0ea23df54cc818c",
   "changed": {
     "native/opentlv_wasm.c": {
-      "sha256": "17e614137671f52db6a88bec457e2a89e36e356cb6b2d411430873510ff394d3",
+      "sha256": "6a4fc4d5fbdb5b619e89edea55b6cbfcb725b73db69f52ee91f49530256813fe",
       "baseline_sha256": "090e201ef7b6c51c7ffafdc5dca992ae7e5ab1719d780aed86575b9e47ed768c",
       "reason": "Issues #3 and #4: additive Format/field and Reader/Writer APIs; restore completed migration sources for historical checks.",
       "restore": [
+        {
+          "current": "    if (d) {\n        builder_text(b, \",\\\"cause\\\":\"); builder_json_string(b, tlv_query_cause_string(d->cause));\n        builder_text(b, \",\\\"configured\\\":\");",
+          "baseline": "    if (d) {\n        builder_text(b, \",\\\"configured\\\":\");"
+        },
+        {
+          "current": "const char* opentlv_wasm_execution_document(opentlv_wasm_execution_t* q,\n                                            opentlv_wasm_document_t* doc, size_t capacity) {\n    return wasm_execution_document_context(q, doc, capacity, NULL);\n}\nconst char* opentlv_wasm_execution_edit(opentlv_wasm_execution_t* q,",
+          "baseline": "const char* opentlv_wasm_execution_edit(opentlv_wasm_execution_t* q,"
+        },
+        {
+          "current": "doc->document, q->exec, context, q->values,",
+          "baseline": "doc->document, q->exec, NULL, q->values,"
+        },
+        {
+          "current": "static const char* wasm_execution_document_context(opentlv_wasm_execution_t* q,\n    opentlv_wasm_document_t* doc, size_t capacity, const tlv_node_t* context) {",
+          "baseline": "const char* opentlv_wasm_execution_document(opentlv_wasm_execution_t* q,\n                                            opentlv_wasm_document_t* doc, size_t capacity) {"
+        },
+        {
+          "current": "\n/* Post-migration Document/Schema boundary. */\n#include \"document_schema.h\"\n",
+          "baseline": ""
+        },
         {
           "current": "    void*              extension;\n    void             (*extension_free)(void*);\n",
           "baseline": ""
@@ -27,7 +47,7 @@
       ]
     },
     "src/query.mjs": {
-      "sha256": "8e8de48ecb11acc9d6d4893ca430487ab9e54cec2019eae2fe9f8e9462e53d3f",
+      "sha256": "d38230ec6d1e62843ed11fe474366c42ee59d3019072401f4e09d944474285bb",
       "baseline_sha256": "4a966ea90a314c1d3e017713d4e842831ba593a21915ab5eafa7ceafb9d6a5de",
       "reason": "Issues #3 and #4: additive Format/field and Reader/Writer APIs; restore completed migration sources for historical checks.",
       "sections": [
@@ -42,9 +62,77 @@
         {
           "start": "  // BEGIN streaming #4\n",
           "end": "  // END streaming #4\n"
+        },
+        {
+          "start": "  // BEGIN document-schema #5\n",
+          "end": "  // END document-schema #5\n"
         }
       ],
       "restore": [
+        {
+          "current": "      this._busy = true;\n      try {\n        if (value_capacity === null) value_capacity = this._program.info.constructed_values_required\n          ? document.queryValueSize(this._maxDepth) : 0;\n      } finally { this._busy = false; }",
+          "baseline": "      if (value_capacity === null) value_capacity = this._program.info.constructed_values_required\n        ? document.queryValueSize(this._maxDepth) : 0;"
+        },
+        {
+          "current": "    constructor(program, { max_depth = 64, max_nodes = 1024, max_work = 100000000, retained = true } = {}) {\n      if (!(program instanceof QueryProgram)) throw new TypeError(\"QueryProgram from this module required\");\n      program._check();\n      this._program = program;",
+          "baseline": "    constructor(program, { max_depth = 64, max_nodes = 1024, max_work = 100000000, retained = true } = {}) {\n      this._program = program;"
+        },
+        {
+          "current": "      const [address, identity] = documentNode(document, context);\n      ++document._active;\n      try { temporary(string(identity), id => this._native(() => wasm._opentlv_wasm_execution_document_context(\n        this._pointer, document._pointer, size(value_capacity), address, id))); }",
+          "baseline": "      ++document._active;\n      try { this._native(() => wasm._opentlv_wasm_execution_document(this._pointer, document._pointer, size(value_capacity))); }"
+        },
+        {
+          "current": "evaluateDocument(document, { value_capacity = null, context = null } = {}) {",
+          "baseline": "evaluateDocument(document, { value_capacity = null } = {}) {"
+        },
+        {
+          "current": "    _native(run, allowEnd = false) {\n      this._busy = true;\n      try { return this._program._native(() => {\n        try { return response(run(), allowEnd); }\n        finally { if (this._program._providerFailed || this._program._formatOwner._failed) this._invalid = true; }\n      }); } finally { this._busy = false; }\n    }",
+          "baseline": "    _native(run, allowEnd = false) {\n      return this._program._native(() => {\n        try { return response(run(), allowEnd); }\n        finally { if (this._program._providerFailed || this._program._formatOwner._failed) this._invalid = true; }\n      });\n    }"
+        },
+        {
+          "current": "    if (reply.code && !(allowEnd && reply.code === END)) {\n      const error = new QueryError(reply.code, reply.query, reply.applied, reply.rule, reply.schema, reply.location, reply.message);\n      if (reply.diagnostic) error.diagnostic = reply.diagnostic;\n      if (reply.reader) error.reader = reply.reader;\n      throw error;\n    }",
+          "baseline": "    if (reply.code && !(allowEnd && reply.code === END)) throw new QueryError(reply.code, reply.query, reply.applied, reply.rule, reply.schema, reply.location, reply.message);"
+        },
+        {
+          "current": "return { Schema, SchemaError, DocumentBuilder, Reader, TreeReader",
+          "baseline": "return { Reader, TreeReader"
+        },
+        {
+          "current": "      ++this._active;\n      try { return this._program._native(() => temporary(string(node?.identity ?? \"0\"), identity => temporary(data, pointer =>\n        response(wasm._opentlv_wasm_document_node(this._pointer, node?._address ?? 0, identity, operation, pointer, data.length)).value))); }\n      finally { --this._active; }",
+          "baseline": "      return this._program._native(() => temporary(string(node?.identity ?? \"0\"), identity => temporary(data, pointer =>\n        response(wasm._opentlv_wasm_document_node(this._pointer, node?._address ?? 0, identity, operation, pointer, data.length)).value)));"
+        },
+        {
+          "current": "      ++this._document._active;\n      try { return temporary(tag, tagPointer => temporary(value, valuePointer => this._native(() =>\n        wasm._opentlv_wasm_execution_edit(this._pointer, kinds[kind], tagPointer, tag.length,\n          valuePointer, value.length, size(target_capacity))))).applied; }\n      finally { --this._document._active; }",
+          "baseline": "      return temporary(tag, tagPointer => temporary(value, valuePointer => this._native(() =>\n        wasm._opentlv_wasm_execution_edit(this._pointer, kinds[kind], tagPointer, tag.length,\n          valuePointer, value.length, size(target_capacity))))).applied;"
+        },
+        {
+          "current": "        finally { this._busy = false; if (this._document) --this._document._active; }",
+          "baseline": "        finally { this._busy = false; }"
+        },
+        {
+          "current": "        this._busy = true;\n        if (this._document) ++this._document._active;\n        let action;",
+          "baseline": "        this._busy = true;\n        let action;"
+        },
+        {
+          "current": "      document._check();\n      if (document._active) throw new QueryError(INVALID_STATE);\n      if (value_capacity === null) value_capacity = this._program.info.constructed_values_required\n        ? document.queryValueSize(this._maxDepth) : 0;\n      ++document._active;",
+          "baseline": "      document._check();\n      ++document._active;"
+        },
+        {
+          "current": "evaluateDocument(document, { value_capacity = null } = {}) {",
+          "baseline": "evaluateDocument(document, { value_capacity = document._inputSize } = {}) {"
+        },
+        {
+          "current": "      this._maxNodes = max_nodes;\n      this._maxDepth = max_depth;",
+          "baseline": "      this._maxNodes = max_nodes;"
+        },
+        {
+          "current": "          this._pointer = temporaries([input, config], ([pointer, options]) => wasm._opentlv_wasm_document_create(\n            program._pointer, pointer, input.length, options));",
+          "baseline": "          this._pointer = temporary(input, pointer => wasm._opentlv_wasm_document_new(\n            program._pointer, pointer, input.length, retain_source_locations ? 1 : 0));"
+        },
+        {
+          "current": "constructor(input, { format = \"ber\", retain_source_locations = false, max_depth = 64, max_elements = 65536 } = {}) {\n      const empty = input === null;\n      if (empty) input = new Uint8Array();\n      bytes(input);\n      const config = pointers([size(max_depth), size(max_elements), flag(retain_source_locations), Number(empty)]);",
+          "baseline": "constructor(input, { format = \"ber\", retain_source_locations = false } = {}) {\n      bytes(input);"
+        },
         {
           "current": "this._pointer = name === composedToken ? createComposed(options) : temporary(string(name)",
           "baseline": "this._pointer = temporary(string(name)"
@@ -64,7 +152,7 @@
       ]
     },
     "cmake/Wasm.cmake": {
-      "sha256": "2bf38784c53a04955c358bce79350b6e682399be66b059db08e56f7083c8611a",
+      "sha256": "d9edfd24b320c6d4c32e9e5e1c002dc342ba2bb421c70ebeb50de4fdc30b185b",
       "baseline_sha256": "06bea19d9f14bb6d147802f23e6e48877fcc2251c3cdd9574026a4eeb0215d46",
       "reason": "Issues #3 and #4: additive Format/field and Reader/Writer APIs; restore completed migration sources for historical checks.",
       "sections": [
@@ -75,6 +163,10 @@
         {
           "start": "\n# BEGIN streaming #4\n",
           "end": "# END streaming #4\n"
+        },
+        {
+          "start": "\n# BEGIN document-schema #5\n",
+          "end": "# END document-schema #5\n"
         }
       ]
     }
@@ -95,6 +187,22 @@
     "examples/streaming.mjs": {
       "reason": "Issue #4: owned Reader/Writer bridge and runnable incremental tree example.",
       "sha256": "96c70a1a93bcda868399df9412b0b916b7fbb1b14fef8aeb1c7bfc153a975189"
+    },
+    "native/document_schema.h": {
+      "reason": "Issue #5: owned Document and structural Schema boundary.",
+      "sha256": "7a7e6d05510beecdafe1514b7b8183eccd9ca2a827eadf20fd2f4049e559ebe9"
+    },
+    "src/opentlv.d.mts": {
+      "reason": "Issue #5: declarations and runnable Document/Schema example.",
+      "sha256": "6fcf4ed89cbc13014491646c701b4a4cb5c012c349a912b4f09f72fbea884e03"
+    },
+    "src/query.d.mts": {
+      "reason": "Issue #5: declarations and runnable Document/Schema example.",
+      "sha256": "22e0151865bdaf8000a5ecde439e56d635feeae546082ab56f239c7722fb7626"
+    },
+    "examples/document_schema.mjs": {
+      "reason": "Issue #5: declarations and runnable Document/Schema example.",
+      "sha256": "80ebf3388a8e3aa17dad8f67ae5ed236428ef1d1728779ad0b236a660fb1ee0c"
     }
   },
   "bridge_additions": [
@@ -109,6 +217,17 @@
     "_opentlv_wasm_stream_input",
     "_opentlv_wasm_stream_visit",
     "_opentlv_wasm_stream_write",
-    "_opentlv_wasm_stream_measure"
+    "_opentlv_wasm_stream_measure",
+    "_opentlv_wasm_document_create",
+    "_opentlv_wasm_document_operation",
+    "_opentlv_wasm_document_query_size",
+    "_opentlv_wasm_document_builder_new",
+    "_opentlv_wasm_document_builder_free",
+    "_opentlv_wasm_document_builder_consume",
+    "_opentlv_wasm_structure_free",
+    "_opentlv_wasm_structure_new",
+    "_opentlv_wasm_structure_validate",
+    "_opentlv_wasm_structure_find",
+    "_opentlv_wasm_execution_document_context"
   ]
 }

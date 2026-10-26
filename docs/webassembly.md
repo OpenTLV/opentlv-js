@@ -283,7 +283,7 @@ a documentation pin does not establish compatibility with the portal's Core pin.
 
 This repository owns WASM, JavaScript and TypeScript integration, including the
 private native adapters, API documentation, examples and tests. TypeScript
-declarations are not available yet; their addition belongs here. Core owns the
+declarations are included by #5 in the checked private package. Core owns the
 public C execution contracts and canonical Query fixtures/ABI snapshots.
 
 ### Native adapters and capabilities
@@ -355,8 +355,8 @@ operations use public Core headers at pinned commit
 `a9a6f9470c2b285744738b40196bef9d0341fead`; JavaScript marshals inputs and owns
 native allocations. Core validates configuration, interprets fields and performs
 framing. The existing named formats, `Format.fixed(options)` and
-`Format.custom(options)` remain available. TypeScript declarations are still a
-separate distribution follow-up.
+`Format.custom(options)` remain available. Issue #5 adds package declarations;
+field composition option objects remain structurally open.
 
 ```javascript
 const { Field, Format } = await loadOpenTLV();
@@ -466,7 +466,7 @@ general Reader/Writer APIs and TypeScript declarations are outside #3.
 
 Issue #4 adds `Reader`, `TreeReader`, `Writer`, `TreeWriter`, `StreamError`,
 `StreamResult` and `Visit` to the object returned by `loadOpenTLV()`. These are
-JavaScript APIs; TypeScript declarations remain a separate distribution task.
+JavaScript APIs, with package declarations added in #5.
 All parsing, traversal, encoding and wire validation runs in the pinned C Core.
 
 ```js
@@ -606,4 +606,152 @@ limits, prefix validation, balanced events, preservation, measurement, rollback,
 retained formats, copied results and memory growth. CTest and private-package
 checks run these tests and the example. See the [coverage inventory](ci.md#readerwriter-inventory-4)
 for pinned symbols and equivalent C entry points. Browser/worker execution and
-TypeScript declaration support require their own validation.
+TypeScript runtime integration beyond the installed consumer checks requires its own validation.
+
+## Document, Query and structural Schema
+
+The post-migration #5 API uses Core
+`a9a6f9470c2b285744738b40196bef9d0341fead`. It adds owning document construction,
+incremental materialization and structural validation. All tree, Query and
+Schema semantics execute in Core. See the
+[symbol inventory and exclusions](ci.md#documentqueryschema-inventory-5).
+
+```js
+const { Document, Schema, compileQuery } = await loadOpenTLV();
+const document = Document.create({ max_depth: 16, max_elements: 100 });
+const query = compileQuery('//5A');
+const schema = new Schema({ rules: [
+  { tag: hexToBytes('5A'), min_occurs: 1, max_occurs: 1,
+    min_length: 1, max_length: 1, kind: 'primitive', name: 'value' },
+] });
+try {
+  document.insert(hexToBytes('5A'), hexToBytes('01'));
+  query.editDocument(document, 'replace', { value: hexToBytes('02') });
+  schema.validate(document.encode());
+} finally {
+  schema.close(); query.close(); document.close();
+}
+```
+
+Run `node examples/document_schema.mjs <build>/dist` for the complete example.
+
+### Owned Documents and Nodes
+
+`new Document(bytes, options)` copies and parses input; `Document.create(options)`
+creates an empty tree. Both accept `format`, `max_depth` (default 64),
+`max_elements` (65536) and `retain_source_locations` (false).
+
+| Operation | Result |
+| --- | --- |
+| `document.insert(tag, value, { parent, before })` | New owned Node; null parent means a root, null before appends |
+| `document.find(tag, parent)` | First matching direct child, or null |
+| `document.findPath('70/5A')` | First V1 path match, or null; this is the legacy path grammar |
+| `document.count`, `revision`, `retireEpoch` | Node count and exact `bigint` mutation/retirement counters |
+| `node.nextSameTag` | Following sibling with the same tag, or null |
+| `node.sourceLocation` | Copied `{ offset, headerSize }`, each nullable |
+| `document.encodedSize(format?)`, `node.encodedSize(format?)` | Exact native encoded size |
+| `document.encodeAs(format)`, `node.encode(format?)` | Copied canonical encoding; optional alternate Format |
+| `document.queryValueSize(max_depth?)` | Native constructed-value staging requirement for compiled Query |
+
+Existing `first`, `firstChild`, `next`, `parent`, `tag`, `value`, `constructed`,
+`setValue`, `erase` and `document.encode()` remain available. Encoding normalizes
+wire spelling; source locations refer to the original input, not new output.
+Edits invalidate affected locations; unchanged siblings retain their coordinates.
+Inserted nodes have no original source location.
+
+Nodes belong to one loaded module and Document. Foreign Nodes are rejected before
+native access; erased nodes and descendants of replaced constructed values fail
+identity checks before dereference. Closing a Document invalidates its JS Nodes
+and selections, even when native execution storage retains it until reset/close.
+Bytes and diagnostic strings are copied before native buffers are reused or freed.
+
+### Incremental DocumentBuilder
+
+`new DocumentBuilder(input, options)` owns an internal TreeReader and accepts
+Document options plus `incremental` and `frame_capacity`. `consume()` returns
+`{ status: 'need-more-data', document: null }` or transfers a complete Document
+as `{ status: 'ok', document }`. Replace input with
+`setInput(bytes, { discard, final })`, retaining the undiscarded prefix exactly.
+`state` exposes the reader's consumed count and offset. Completion and terminal
+errors prohibit further consumption; `close()` releases the builder and reader.
+The transferred Document remains usable after builder closure.
+
+The builder materializes a whole owned input stream. Borrowing an external
+TreeReader or selecting its last published subtree is not exposed; this avoids
+sharing a mutable native cursor across two public owners. This is a deliberate
+surface restriction despite references to all three native builder functions.
+
+### Query evaluation and edits
+
+`program.evaluateDocument(document, options)` returns copied scalars or live Node
+handles. `execution.evaluateDocument(document, { context, value_capacity })`
+accepts an optional Node from that Document as the contextual root. Convenience
+evaluation/editing also accepts variable `bindings` and execution limits.
+
+`program.editDocument(document, kind, options)` evaluates a fresh selection and
+applies `remove`, `replace` or `insert_after`. The existing execution method allows
+explicit control of selection and `target_capacity`. Insufficient target storage
+preserves the selection for retry. Successful edits invalidate the execution's
+revision. Native partial-application failures retain `QueryError.applied`.
+No automatic rollback is promised for allocation or user callback failures.
+
+Default constructed-value storage is measured from the current Document as one
+complete canonical encoded snapshot. It no longer depends on the original input size.
+An explicit `value_capacity` remains a hard bound. Query Schema validation
+continues to allocate a current encoded snapshot when its capacity is omitted.
+
+Synchronous visit callbacks can stop with `false`. They cannot close or mutate
+the active Document or execution. Provider and Format callback exceptions retain
+their original JS identity. Reset an execution after a failed visitor/provider;
+do not reuse a failed builder. Native limits, diagnostics and revision checks
+remain authoritative.
+
+### Structural Schema
+
+`new Schema(definition, { format })` copies tags, names, rules and groups into
+native-owned storage, then prepares/checks the complete definition. Mutation of
+the original JS objects has no effect. Shared and recursive table objects are
+supported, with at most 256 distinct tables and native validation depth limits.
+
+A table has `rules`, `allow_unknown` (false), `order` (`any` or `sequence`) and
+optional `groups`. A rule contains a byte `tag`, optional `name`, inclusive
+`min_length`/`max_length` (0/4294967295), `length_multiple` (0 disables),
+`endpoints` (false), `min_occurs`/`max_occurs` (0/1), `kind`
+(`any`, `primitive` or `constructed`), optional `children` table and `group` ID.
+A group has `id`, optional `name`, and occurrence bounds (0/1 by default).
+Use 4294967295 for an unrestricted wasm32 upper bound. Group member rules must
+have `min_occurs: 0`; Core checks definition consistency.
+
+`validate(bytes, { max_depth, max_elements })` returns normally on success or
+throws `SchemaError`. `validateAll(bytes, { capacity, unknown, ...limits })`
+collects up to `capacity` diagnostics (default 64), still throwing on violations
+or terminal failures. The error owns `diagnostics`, a terminal `diagnostic`,
+`cause`, and Schema or Reader detail. A full/zero-capacity report does not imply
+validation succeeded. Unknown policy is `schema` (default), `allow` or `reject`.
+Reports retain path/location and occurrence/length/kind/definition evidence after
+later validation or schema closure.
+
+`find(tag, tableIndex = 0)` returns a copied length entry or null;
+`validateLength(tag, length, tableIndex = 0)` validates length without wire parsing.
+Table indices follow first-encounter depth-first order, root zero. `QuerySchema`
+continues to provide contextual Query assertions for buffers and Documents.
+Structural Schema validates encoded buffers; use `schema.validate(document.encode())`
+when validation of the current canonical Document representation is desired.
+Its locations then refer to that encoding, not the original parsed input.
+
+### TypeScript declarations
+
+The private package ships `.d.mts` declarations for the root, facade, Query and
+version entry points, using matching
+[ES module declarations](https://www.typescriptlang.org/docs/handbook/modules/theory.html).
+Runtime constructors are properties of the object returned by `loadOpenTLV()`;
+interfaces such as `Document`, `Node`, `QueryProgram` and `SchemaTable` are type-only
+exports. TypeScript 5.9.3 strict consumer checks cover NodeNext and Bundler module
+resolution, positive calls and rejected argument types. This is not a bundler or
+browser runtime test. Existing Format/streaming types are included; generic
+field-composition option objects remain structurally open.
+
+The four existing runtime output names are unchanged. Two declaration files are
+also copied beside the build outputs; the checked package adds root/version
+declarations and explicit `types` exports. Install the checked private archive,
+not the source checkout. All owned objects still require explicit `close()`.
