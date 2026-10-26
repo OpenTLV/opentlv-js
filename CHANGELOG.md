@@ -6,11 +6,13 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Use Ninja provided by the Ubuntu CI runner and verify its availability without refreshing APT package indexes. (#7)
 - Own the private Query/Schema adapters and remaining WASM guide content; build against Core without its removed `bindings/` tree while retaining immutable migration provenance. (OpenTLV/opentlv#698)
 - Normalize the standalone layout into `src/`, `native/`, `tests/`, `examples/` and `cmake/`, with build outputs in `<build>/dist/`; preserve public imports and immutable migration provenance. (#12)
 
 ### Added
 
+- Complete the generic API review with Core-backed scalar ValueConstraint and Tag operations, exact 64-bit inputs, binding/package/type regressions and per-header functional coverage with justified exclusions. (#7)
 - Complete generic value and structure Codec APIs, Schema-number composition and deterministic wire Generator with copied diagnostics, exact 64-bit values, TypeScript declarations and binding/package regressions. (#6)
 - Complete owned Document construction, insertion, lookup, source locations, encoding and incremental building; add contextual Query evaluation/editing, structural Schema validation with copied reports, TypeScript package declarations and binding/consumer regressions. (#5)
 - Expose owned Reader/Writer and tree streaming APIs with incremental windows, resumable visitors, balanced events, bounded output, exact tree measurement, structured diagnostics and binding/package regressions. (#4)

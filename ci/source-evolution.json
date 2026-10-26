@@ -1,13 +1,17 @@
 {
   "schema": 1,
-  "reason": "Post-migration issues #3 through #6; preserve immutable sources with separately verified additions.",
+  "reason": "Post-migration issues #3 through #7; preserve immutable sources with separately verified additions.",
   "baseline_js_commit": "9f95ea12facc7a76751119b2f0ea23df54cc818c",
   "changed": {
     "native/opentlv_wasm.c": {
-      "sha256": "50f8e99575693744d63e38f26725c88f755304a1ef4c7d8b06ac6c572f5b3107",
+      "sha256": "2c4ff595eaf4e16fd507d31ed36ba5a04bae3320af3313c25613ae7baaad485e",
       "baseline_sha256": "090e201ef7b6c51c7ffafdc5dca992ae7e5ab1719d780aed86575b9e47ed768c",
       "reason": "Issues #3 and #4: additive Format/field and Reader/Writer APIs; restore completed migration sources for historical checks.",
       "restore": [
+        {
+          "current": "\n/* Post-migration generic completion boundary. */\n#include \"generic.h\"\n",
+          "baseline": ""
+        },
         {
           "current": "fields[3], fields[4], result->element, &owner->format, tag ? TLV_TAG_BINDING_FORMAT : TLV_TAG_BINDING_SOURCE};",
           "baseline": "fields[3], fields[4], result->element, &owner->format, TLV_TAG_BINDING_FORMAT};"
@@ -59,7 +63,7 @@
       ]
     },
     "src/query.mjs": {
-      "sha256": "f708a8ff49eff4f8acd4e7edda08f48ad464ba0a8a9d8b36ceb6bc846b4dc1f5",
+      "sha256": "a10ec496a246360547b64f228b14b3930acdbc1226460c91db98841dd8547b09",
       "baseline_sha256": "4a966ea90a314c1d3e017713d4e842831ba593a21915ab5eafa7ceafb9d6a5de",
       "reason": "Issues #3 and #4: additive Format/field and Reader/Writer APIs; restore completed migration sources for historical checks.",
       "sections": [
@@ -82,9 +86,17 @@
         {
           "start": "  // BEGIN codecs-generator #6\n",
           "end": "  // END codecs-generator #6\n"
+        },
+        {
+          "start": "  // BEGIN generic-completion #7\n",
+          "end": "  // END generic-completion #7\n"
         }
       ],
       "restore": [
+        {
+          "current": "return { ValueConstraint, ConstraintError, Tag, Codec,",
+          "baseline": "return { Codec,"
+        },
         {
           "current": "            return temporary(tag === null ? new Uint8Array() : bytes(tag), tagPointer => temporary(pointers(ranges), rangePointer =>\n              wasm._opentlv_wasm_format_decoded(owner, result, data, length, tag === null ? 0 : tagPointer, tag?.length ?? 0, rangePointer)));",
           "baseline": "            return temporary(bytes(tag), tagPointer => temporary(pointers(ranges), rangePointer =>\n              wasm._opentlv_wasm_format_decoded(owner, result, data, length, tagPointer, tag.length, rangePointer)));"
@@ -180,7 +192,7 @@
       ]
     },
     "cmake/Wasm.cmake": {
-      "sha256": "e275cbf7afc2cb1d37ec49999d093467e200df81c9d9abecaed7ed294109f35a",
+      "sha256": "91d5f8f426bcd5cf2b75ace58279c9add3edead32553c66a504983a9c8f27238",
       "baseline_sha256": "06bea19d9f14bb6d147802f23e6e48877fcc2251c3cdd9574026a4eeb0215d46",
       "reason": "Issues #3 and #4: additive Format/field and Reader/Writer APIs; restore completed migration sources for historical checks.",
       "sections": [
@@ -199,6 +211,10 @@
         {
           "start": "\n# BEGIN codecs-generator #6\n",
           "end": "# END codecs-generator #6\n"
+        },
+        {
+          "start": "\n# BEGIN generic-completion #7\n",
+          "end": "# END generic-completion #7\n"
         }
       ]
     }
@@ -230,7 +246,7 @@
     },
     "src/query.d.mts": {
       "reason": "Issue #5: declarations and runnable Document/Schema example.",
-      "sha256": "3e579f8fd34538a16644e72f95fbe63945c30f7db0c0c791dd45b9852aa418b8"
+      "sha256": "3cdfbfb624fe10725e216ec6e41dd947dc183b044640010e177bcdf637864224"
     },
     "examples/document_schema.mjs": {
       "reason": "Issue #5: declarations and runnable Document/Schema example.",
@@ -243,6 +259,10 @@
     "examples/codecs_generator.mjs": {
       "reason": "Issue #6: generic Codec and deterministic wire Generator APIs.",
       "sha256": "9785e3d131b86f7c1e39ccc8c0441813aca6ca850e3a4f4188740570b16068b3"
+    },
+    "native/generic.h": {
+      "reason": "Issue #7: Core-backed scalar constraints and tag operations.",
+      "sha256": "80aaf923bb1cdc8ef843c574252b9fe1c6298b7d7673d9eb1571884db902dd8a"
     }
   },
   "bridge_additions": [
@@ -271,6 +291,8 @@
     "_opentlv_wasm_execution_document_context",
     "_opentlv_wasm_codec",
     "_opentlv_wasm_structure_codec",
-    "_opentlv_wasm_generate"
+    "_opentlv_wasm_generate",
+    "_opentlv_wasm_constraint",
+    "_opentlv_wasm_tag_operation"
   ]
 }

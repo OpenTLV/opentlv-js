@@ -153,6 +153,8 @@ Browser/worker runtime, hosted CI and publication require separate evidence.
 CI also publishes an informational [pinned Core API reference report](docs/ci.md#pinned-core-api-reference-report)
 with per-header gaps, reviewed exclusions and PR Core-pin changes. It separates
 generic Core from Builtins and does not measure functional JS/TypeScript parity.
+The [generic API coverage review](docs/webassembly.md#generic-api-coverage-review) maps every generic header
+at the exact pin to public operations, binding tests and reviewed exclusions.
 
 The [generic Format and field API](docs/webassembly.md#generic-formats-and-field-encodings)
 supports owned Fixed/Variable/Escaped/Packed field configuration, composition,
@@ -175,6 +177,9 @@ The [generic Codec and wire Generator API](docs/webassembly.md#generic-codecs-an
 adds integer, BCD, digit, text, byte and IPv4 conversion, Schema-number composition,
 validated application-object adapters and deterministic random-access wire cases.
 Run `node examples/codecs_generator.mjs <build>/dist` for a BCD and generation example.
+The [scalar constraint and tag API](docs/webassembly.md#scalar-constraints-and-tag-operations)
+adds Core-backed decoded-value validation, named allowed values and bytewise tag
+comparison/hashing, with exact signed 64-bit inputs.
 
 ## Private package and version
 

@@ -186,7 +186,25 @@ export interface GeneratorOptions {
 export interface Generator extends Owned {
   readonly version: number; readonly workspaceSize: number; generate(case_index?: CodecInteger): Uint8Array;
 }
+export interface ValueConstraint extends Owned {
+  /** Throws ConstraintError when a decoded signed 64-bit scalar is rejected. */
+  validate(value: CodecInteger): void;
+  name(value: CodecInteger): string | null;
+}
+export interface ConstraintError extends Error { readonly code: number }
 export interface QueryAPI {
+  ValueConstraint: {
+    none(): ValueConstraint;
+    range(min: CodecInteger, max: CodecInteger): ValueConstraint;
+    allowed(entries: readonly { value: CodecInteger; name?: string | null }[]): ValueConstraint;
+  };
+  ConstraintError: { readonly prototype: ConstraintError; new(code: number): ConstraintError };
+  Tag: {
+    compare(left: Uint8Array, right: Uint8Array): -1 | 0 | 1;
+    equal(left: Uint8Array, right: Uint8Array): boolean;
+    /** Build-local hash; never persist or transmit it. */
+    hash(tag: Uint8Array): number;
+  };
   Codec: {
     builtin(name: 'uint8' | 'uint16-be' | 'uint16-le' | 'uint32-be' | 'uint32-le'): Codec<number, CodecInteger>;
     builtin(name: 'int64-minimal-be'): Codec<bigint, CodecInteger>;

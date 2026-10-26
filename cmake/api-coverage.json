@@ -61,6 +61,83 @@
     {
       "reason": "Raw relocatable-plan views expose borrowed C pointers and layout internals. QueryProgram.load/image/info/explain provide validated owned image access; direct plan inspection is intentionally excluded.",
       "symbols": ["tlv_query_plan_open", "tlv_query_plan_info"]
+    },
+    {
+      "reason": "Uint8Array.slice copies values or exact encoded ranges; Writer.encode/measure provide canonical element serialization and Writer.preserve retains validated source framing. Native pointer/capacity copy entry points add no JS behavior.",
+      "symbols": [
+        "tlv_copy_element",
+        "tlv_copy_encoded",
+        "tlv_copy_value"
+      ]
+    },
+    {
+      "reason": "Diagnostic initialization, linked context/path mutation and location enrichment serve native producers. JS receives copied diagnostic/location/path records from Reader, Writer, Query, Schema and Codec errors; callers may construct application records without borrowing C storage. Native diagnostic editing and rendering are intentionally not public JS operations.",
+      "symbols": [
+        "tlv_diagnostic_add_context",
+        "tlv_diagnostic_init",
+        "tlv_diagnostic_path_init",
+        "tlv_diagnostic_path_pop",
+        "tlv_diagnostic_path_push",
+        "tlv_diagnostic_path_string",
+        "tlv_diagnostic_set_path",
+        "tlv_location_resolve",
+        "tlv_location_set"
+      ]
+    },
+    {
+      "reason": "Codec.number({encoding: big or little, width: 1..8}) provides Core-backed zero-padded unsigned conversion with exact bigint values; fixed codecs cover u16/u32 conveniences. Unchecked C load/store functions and the executing WASM platform byte order are not additional wire operations.",
+      "symbols": [
+        "tlv_endian_native",
+        "tlv_read_u16_be",
+        "tlv_read_u16_le",
+        "tlv_read_u32_be",
+        "tlv_read_u32_le",
+        "tlv_read_u64_be",
+        "tlv_read_u64_le",
+        "tlv_read_uint",
+        "tlv_write_u16_be",
+        "tlv_write_u16_le",
+        "tlv_write_u32_be",
+        "tlv_write_u32_le",
+        "tlv_write_u64_be",
+        "tlv_write_u64_le",
+        "tlv_write_uint"
+      ]
+    },
+    {
+      "reason": "definitionResolver snapshots scoped name/tag tables; Query providers compose Codec.decode with explicit capability IDs, bounded text results and signed-int64 checks. JS callbacks retain their codec and must keep it open; original CodecError or callback exceptions propagate. Native borrowed registry/codec/scratch layouts are intentionally not exposed; these adapters are functional composition, not identical native diagnostic/status behavior.",
+      "symbols": [
+        "tlv_query_codec_decode",
+        "tlv_query_definition_resolve"
+      ]
+    },
+    {
+      "reason": "JS validates safe integer wasm32 sizes before allocation; wire uint64 values use bigint and Core operations. Converting or adding C size_t/tlv_size_t storage is an implementation interface rather than a separate JS API.",
+      "symbols": [
+        "tlv_size_add",
+        "tlv_size_from_native",
+        "tlv_size_validate_native"
+      ]
+    },
+    {
+      "reason": "Tag.equal uses Core-backed Tag.compare; zero length and copied storage use Uint8Array.length and slice. These convenience C functions add no distinct JS behavior.",
+      "symbols": [
+        "tlv_tag_copy",
+        "tlv_tag_equal",
+        "tlv_tag_is_empty"
+      ]
+    },
+    {
+      "reason": "Values are checked Uint8Array inputs and copied outputs. length, subarray/slice and set replace borrowed span construction, native-size validation, slicing and copying; Tag.compare/equal compare arbitrary byte sequences without interpreting them. Raw C view ownership and pointer validation are intentionally excluded.",
+      "symbols": [
+        "tlv_value_compare",
+        "tlv_value_copy",
+        "tlv_value_equal",
+        "tlv_value_init",
+        "tlv_value_is_empty",
+        "tlv_value_slice",
+        "tlv_value_validate"
+      ]
     }
   ]
 }

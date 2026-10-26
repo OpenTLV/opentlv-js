@@ -119,3 +119,12 @@ if(OPENTLV_BUILD_WASM_TESTS AND OPENTLV_NODE_EXECUTABLE)
         PROPERTIES LABELS "integration;wasm")
 endif()
 # END codecs-generator #6
+
+# BEGIN generic-completion #7
+target_sources(opentlv-wasm PRIVATE native/generic.h)
+if(OPENTLV_BUILD_WASM_TESTS AND OPENTLV_NODE_EXECUTABLE)
+    add_test(NAME Integration_wasm_generic
+        COMMAND ${OPENTLV_NODE_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tests/generic.mjs" "${_wasm_output_dir}")
+    set_tests_properties(Integration_wasm_generic PROPERTIES LABELS "integration;wasm")
+endif()
+# END generic-completion #7

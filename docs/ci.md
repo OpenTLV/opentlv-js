@@ -10,6 +10,8 @@ Core. The migrated smoke test (`tests/smoke.mjs`), parse example
 All runtime jobs use Ubuntu 24.04, Emscripten **4.0.10**, Node **22**, Ninja and
 the exact Core revision in `cmake/core-source.json`. Node is selected after the
 Emscripten environment, so the SDK's bundled Node cannot silently replace it.
+Ninja comes from the Ubuntu runner image; `ninja --version` verifies its
+availability without an APT update or dependency on Ubuntu package mirrors.
 
 | Workflow | Trigger | Runtime checks |
 | --- | --- | --- |
@@ -35,6 +37,11 @@ rehearses the same checks without creating a tag. No workflow publishes an npm
 package, creates a GitHub release or claims release attestation.
 
 ## Pinned Core API reference report
+
+The [generic API review](webassembly.md#generic-api-coverage-review) records the exact-pin per-header
+inventory, public operations, functional tests and representation exclusions.
+Its reviewed snapshot has 197 referenced generic symbols, zero unclassified
+gaps and 100 exclusions. Counts remain informational and do not certify parity.
 
 The infrastructure job also runs `scripts/api_coverage.py`, adapted from the
 Python binding's reporter and its Go port. It writes
@@ -129,7 +136,7 @@ work. Generic tests run as CTests and against the installed archive.
 ### Post-migration source evolution
 
 `ci/source-evolution.json` records reviewed changed/added source hashes and exact
-reversible changes for #3. The original migration inventory, build-adaptation
+reversible changes for #3 through #7. The original migration inventory, build-adaptation
 hashes, Core pin and 57 bridge declarations remain immutable. The source
 verifier checks current additions, restores the recorded migration bytes in
 memory, and verifies those against the original hashes/Git objects. Unknown
@@ -140,7 +147,7 @@ intentionally change current binaries, the runner also reconstructs and builds
 the completed standalone migration sources and requires their exact contract
 and all four output hashes to equal the historical Core build. A separate check
 compares the current public Emscripten runtime and ES-module namespaces, allowing
-only the five reviewed additional bridge exports. Current binary descriptors
+only the reviewed additional bridge exports listed in the record. Current binary descriptors
 are recorded, but their minified names are not an ABI contract. Feature CTests,
 existing facade/ABI tests and installed-package tests run on the current build.
 Release continues to compare two independent **current** builds and archives.

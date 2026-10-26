@@ -1408,7 +1408,57 @@ export function queryFacade(wasm) {
     }
   }
   // END codecs-generator #6
-  return { Codec, CodecError, StructureCodec, Generator, Schema, SchemaError, DocumentBuilder, Reader, TreeReader, Writer, TreeWriter, StreamError, StreamResult, Visit, QueryProgram, QueryExecution, QuerySchema, QueryError, Document, Node, Format, Field, FormatError, V1Query, nameResolver, definitionResolver,
+  // BEGIN generic-completion #7
+  class ConstraintError extends Error {
+    constructor(code) {
+      super(wasm.UTF8ToString(wasm._opentlv_wasm_strerror(code)));
+      this.name = "ConstraintError"; this.code = code;
+    }
+  }
+  const constraintToken = Symbol("constraint");
+  class ValueConstraint {
+    #kind; #values; #names; #closed = false;
+    constructor(token, kind, min, max, entries) {
+      if (token !== constraintToken) throw new TypeError("use ValueConstraint factories");
+      this.#kind = kind;
+      this.#values = new Uint8Array((3 + entries.length) * 8);
+      [min, max, 0, ...entries.map(entry => entry.value)].forEach((value, index) =>
+        this.#values.set(integerBytes(value, 8, true), index * 8));
+      this.#names = entries.map(entry => entry.name == null ? null : string(entry.name));
+      this.#run(0, 0);
+    }
+    static none() { return new ValueConstraint(constraintToken, 0, 0, 0, []); }
+    static range(min, max) { return new ValueConstraint(constraintToken, 1, min, max, []); }
+    static allowed(entries) {
+      if (!Array.isArray(entries)) throw new TypeError("allowed value entries required");
+      return new ValueConstraint(constraintToken, 2, 0, 0, entries);
+    }
+    #run(operation, value) {
+      if (this.#closed) throw new QueryError(INVALID_STATE);
+      const values = this.#values.slice(); values.set(integerBytes(value, 8, true), 16);
+      return temporaries([values, ...this.#names.map(name => name ?? new Uint8Array())], addresses =>
+        temporary(pointers(addresses.slice(1).map((p, i) => this.#names[i] === null ? 0 : p)), names => {
+          const reply = dsReply(wasm._opentlv_wasm_constraint(this.#kind, operation, addresses[0], this.#names.length, names), true);
+          if (reply.code) throw new ConstraintError(reply.code);
+          return reply.name;
+        }));
+    }
+    validate(value) { this.#run(1, value); }
+    name(value) { return this.#run(2, value); }
+    close() { this.#closed = true; this.#values = null; this.#names = null; }
+  }
+  function tagOperation(operation, left, right) {
+    bytes(left); bytes(right);
+    return temporaries([left, right], ([a, b]) =>
+      dsReply(wasm._opentlv_wasm_tag_operation(operation, a, left.length, b, right.length)).value);
+  }
+  const Tag = Object.freeze({
+    compare: (left, right) => tagOperation(0, left, right),
+    equal: (left, right) => tagOperation(0, left, right) === 0,
+    hash: tag => tagOperation(1, tag, new Uint8Array()),
+  });
+  // END generic-completion #7
+  return { ValueConstraint, ConstraintError, Tag, Codec, CodecError, StructureCodec, Generator, Schema, SchemaError, DocumentBuilder, Reader, TreeReader, Writer, TreeWriter, StreamError, StreamResult, Visit, QueryProgram, QueryExecution, QuerySchema, QueryError, Document, Node, Format, Field, FormatError, V1Query, nameResolver, definitionResolver,
     compileQuery: (text, options) => new QueryProgram(text, options),
     loadQuery: (image, options) => QueryProgram.load(image, options),
     querySchema: (rules, options) => new QuerySchema(rules, options),
