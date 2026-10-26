@@ -22,7 +22,8 @@ class PackageTests(unittest.TestCase):
         self.root = Path(temporary.name)
         self.source = self.root / "source"
         for name in ("package.json", "packaging/index.mjs", "packaging/README.md", "LICENSE", "CHANGELOG.md",
-                     "src/opentlv.mjs", "src/query.mjs"):
+                     "src/opentlv.mjs", "src/query.mjs", "src/opentlv.d.mts", "src/query.d.mts",
+                     "packaging/index.d.mts", "packaging/version.d.mts"):
             target = self.source / name
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(package.ROOT / name, target)
@@ -30,7 +31,7 @@ class PackageTests(unittest.TestCase):
         self.dist.mkdir()
         (self.dist / "opentlv-core.js").write_text("export default function createOpenTLV() {}\n")
         (self.dist / "opentlv-core.wasm").write_bytes(b"\0asm\x01\0\0\0")
-        for name in ("opentlv.mjs", "query.mjs"):
+        for name in ("opentlv.mjs", "query.mjs", "opentlv.d.mts", "query.d.mts"):
             shutil.copyfile(self.source / "src" / name, self.dist / name)
         self.selection = dict(mode="pinned-source", release_verified=False, repository="fixture",
                               commit="a" * 40, tree="b" * 40, source_sha256="c" * 64,
@@ -64,6 +65,11 @@ class PackageTests(unittest.TestCase):
                 self.edit_metadata(version=version)
                 with self.assertRaisesRegex(ValueError, "SemVer"):
                     package.metadata(self.source)
+
+    def test_stale_declarations_fail(self):
+        (self.dist / "query.d.mts").write_text("export {};\n")
+        with self.assertRaisesRegex(ValueError, "Stale or modified type declaration"):
+            self.stage()
 
     def test_publishable_or_inaccurate_metadata_fails(self):
         for change in ({"private": False}, {"name": "@opentlv/js"}, {"exports": {}},

@@ -15,7 +15,7 @@ No publish command, credentials, lifecycle hook or GitHub release action is adde
 
 ## Build and check
 
-Activate Emscripten 4.0.10 and Node 22 (including its bundled npm), then run:
+Activate Emscripten 4.0.10, Node 22 (including npm) and TypeScript 5.9.3 (`tsc` on `PATH`), then run:
 
 ```sh
 emcmake cmake -S . -B build-wasm -G Ninja -DCMAKE_BUILD_TYPE=Release
@@ -28,7 +28,9 @@ Use the default pinned Core build. The command verifies its live source receipt
 and rejects sibling development overrides. It checks all four nonempty outputs
 in `<build>/dist/`, the WASM header and wrapper equality with `src/*.mjs`.
 It runs the smoke, Format/field and Reader/Writer streaming suites and their
-parse, fields and streaming examples against the installed package.
+parse, fields and streaming examples against the installed package. It also runs
+the Document/Schema suite and example, and compiles the installed TypeScript
+consumer with strict NodeNext and Bundler resolution.
 These checks establish local package consistency, not attestation of arbitrary
 prebuilt binaries. CI builds the inputs afresh before packaging.
 
@@ -56,7 +58,8 @@ The exact archive name, hashes and commands are in `build/package-check/result.j
 ## API and evidence
 
 The [package README](../packaging/README.md) describes each export and asset
-location. The original four output filenames and bytes are preserved.
+location. The four original runtime filenames remain unchanged; API additions
+are tracked separately from the immutable migration baseline.
 `packaging/index.mjs` re-exports the existing facade and adds `packageVersion`.
 The `opentlv-js/version` subpath exposes that value without loading the facade.
 Existing `(await loadOpenTLV()).version` and the C bridge version entry point continue
@@ -65,8 +68,11 @@ to identify Core, preserving their migration contract.
 `package-info.json` includes binding identity and separate immutable Core source
 identity/output hashes. It excludes machine-specific build paths so identical
 builds can produce identical packages. Node 22 is the validated runtime; ESM is
-the only package module interface. Browser/worker runtime tests, CommonJS,
-TypeScript, CDN and bundler support are not claimed.
+the only package module interface. The exact 15-file archive includes four
+`.d.mts` declarations, with `types` exports for the root, facade, Query and version
+entry points. TypeScript 5.9.3 checks both NodeNext and Bundler resolution; this
+does not establish browser/worker or bundler runtime compatibility. CommonJS
+and CDN support are not claimed.
 
 All [CI tiers](ci.md) run package checks. The Release reproducibility tier also
 compares the complete private archive hash, metadata and file hashes across two

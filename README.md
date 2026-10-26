@@ -12,8 +12,8 @@ build compiles the selected Core and bridge together with Emscripten, preserving
 the original JavaScript API and output names. Build adaptations are recorded in
 [MIGRATION.md](MIGRATION.md).
 Private local JS/WASM package preparation is available with independent version
-metadata and explicit ESM exports. There is no published npm artifact or
-TypeScript declaration set yet. WASM, JavaScript and future TypeScript APIs,
+metadata and explicit ESM exports. There is no published npm artifact. The private package includes TypeScript
+declarations checked with TypeScript 5.9.3. WASM, JavaScript and TypeScript APIs,
 private native adapters, examples and documentation belong to this repository.
 
 The behavior-preserving baseline is Core commit
@@ -164,10 +164,17 @@ adds owned incremental cursors, resumable visitors, balanced tree events,
 bounded writers and exact tree measurement. Run
 `node examples/streaming.mjs <build>/dist` for an incremental event round trip.
 
+The [Document, Query and Schema API](docs/webassembly.md#document-query-and-structural-schema)
+adds owned tree construction and incremental building, contextual queries and edits,
+structural validation and copied diagnostics. Run
+`node examples/document_schema.mjs <build>/dist` for a create/edit/validate round trip.
+The package includes declarations for these APIs and checks installed consumers
+in TypeScript NodeNext and Bundler resolution modes.
+
 ## Private package and version
 
 [package.json](package.json) defines the independent JS version, initially
-`0.1.0-dev.0`, with `private: true`. After a default pinned build, run:
+`0.1.0-dev.0`, with `private: true`. After a default pinned build, put TypeScript 5.9.3 (`tsc`) on `PATH`, then run:
 
 ```sh
 python -B scripts/package.py --build build-wasm --output build/package-check
