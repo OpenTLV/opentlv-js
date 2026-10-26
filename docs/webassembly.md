@@ -335,8 +335,9 @@ have no compatibility aliases.
 ### Executable example coverage
 
 [examples/parse.mjs](../examples/parse.mjs) demonstrates nested BER parsing and
-traversal through the supported JavaScript loader. There are no dedicated
-quick-start round-trip, Writer, construction, Document, Query, Schema or Codec
+traversal through the supported JavaScript loader. [examples/fields.mjs](../examples/fields.mjs)
+demonstrates a composed-format round trip. There are no dedicated
+Writer, construction, Document, Query, Schema or Codec
 example programs yet. This is example coverage, not a claim that those APIs all
 lack implementations.
 
@@ -346,3 +347,117 @@ The smoke test, Query facade regressions and wasm32 ABI check are owned by this
 repository's [CI](ci.md), consuming the selected Core's shared fixtures and ABI
 contract. A future iterable Reader must follow JavaScript iteration/error
 conventions while preserving the public C execution semantics.
+
+## Generic formats and field encodings
+
+Available after `loadOpenTLV()` as `Field`, `Format` and `FormatError`. These
+operations use public Core headers at pinned commit
+`a9a6f9470c2b285744738b40196bef9d0341fead`; JavaScript marshals inputs and owns
+native allocations. Core validates configuration, interprets fields and performs
+framing. The existing named formats, `Format.fixed(options)` and
+`Format.custom(options)` remain available. TypeScript declarations are still a
+separate distribution follow-up.
+
+```javascript
+const { Field, Format } = await loadOpenTLV();
+const identifier = Field.fixedIdentifier(1);
+const length = Field.variableLength({ policy: { require_minimal: true } });
+let format;
+try {
+  format = Format.compose(identifier, length);
+  identifier.close(); length.close(); // format owns independent native references
+  const wire = format.encode({ tag: hexToBytes("42"), value: hexToBytes("AABB") });
+  const decoded = format.decode(wire);
+  console.log(decoded.tag, decoded.value, decoded.source);
+} finally { format?.close(); identifier.close(); length.close(); }
+```
+
+### Field factories and operations
+
+| Factory | Configuration |
+| --- | --- |
+| `Field.fixedIdentifier(size = 1)` | Nonzero raw identifier width |
+| `Field.fixedLength(size = 1, byte_order = "big")` | Count width 1–8, `big` or `little` |
+| `Field.variableIdentifier(options)` | `inline_mask=31`, `escape=31`, `continuation_bit=128`, `payload_mask=127`, `max_size=16`, optional `policy` |
+| `Field.variableLength(options)` | `long_form_bit=128`, `payload_mask=127`, `byte_order="big"`, optional `policy` |
+| `Field.escapedLength(options)` | `escape=255`, `extended_size=2`, `byte_order="big"`, `min_extended=255`, `max_length=65535` |
+| `Field.packed(options)` | `storage_size=1`, `bit_offset=0`, `bit_width=8`, `byte_order="big"` |
+
+Identifier policy accepts `forbidden_leading: Uint8Array`,
+`reject_zero_first_payload: boolean` and `require_minimal: boolean` (both default
+false). Length policy accepts `allow_short=true`, `allow_long=true`,
+`require_minimal=false`, `max_long_octets=8` and `max_value=2^64-1`.
+Omitting a policy selects Core's unconstrained encoding; an explicit policy is
+snapshotted, including its byte table.
+
+`field.read(bytes)` returns `{tag: Uint8Array, consumed}` for identifiers and
+`{value, consumed}` for counts/packed fields. `field.encode(tagBytes)` validates
+and copies an identifier; `field.encode(count)` creates encoded count bytes.
+For a packed field, `field.encode(count, storageBytes)` returns a modified copy
+of storage, preserving other bits and leaving the caller's input unchanged.
+Packed tags and length fields in a Format must both use its `header_size` as
+their `storage_size`.
+
+Counts accept safe integer Numbers or unsigned 64-bit BigInts. Numeric results
+are Numbers when safe and BigInts otherwise. JS checks scalar representation,
+byte-array types and wasm32 allocation sizes; Core checks encoding constraints.
+Invalid configuration and wire input raise `FormatError` with the Core `code`.
+Field read failures also report Core's `consumed` prefix (Packed has no partial
+consumption and reports zero on failure). Type/representation
+errors raise `TypeError` or `RangeError` before entering WASM.
+
+### Composition and Format operations
+
+| Factory | Inputs |
+| --- | --- |
+| `Format.compose(identifier, length, options)` | Two live Fields; identifier must be Fixed/Variable, length Fixed/Variable/Escaped |
+| `Format.variable(options)` | `identifier` and `length` configuration objects for Variable fields |
+| `Format.escaped(options)` | `tag_size=1` and an Escaped `length` configuration object |
+| `Format.packed(options)` | `header_size`, `tag_size`, `tag_storage: Uint8Array`, Packed `tag` and `length` configuration objects |
+
+Composition options are `element_order: "tlv" | "ltv"` (default `tlv`),
+`length_scope: "value" | "tag-and-value"` (default `value`) and optional
+`constructed: {byte_index, mask, value}`. Mixed and Escaped compositions also
+accept `tag_only: Uint8Array[]`; these tags have no length/value on the wire.
+Variable and Packed reject nonempty tag-only tables. Packed requires `tlv`
+order: its fields share the header. Its tag-storage entry `i` must contain the
+big-endian representation of `i`, with all `2^tag.bit_width` entries present.
+The binding copies this table; Core checks layout capacity at construction and
+canonical table entries when decoding. An `isConstructed(tag)` callback is also
+supported as with existing Formats and overrides the declarative predicate.
+
+All Formats expose:
+
+- `canRead`, `canWrite`: descriptor capabilities.
+- `decode(bytes)`: one element as `{tag, value, encodedSize, constructed, source}`.
+  Tag/value bytes are copies; absent tags are `null`, explicit empty tags remain
+  empty arrays. Source has `header`, `tag`, `length`, `value`, `trailer` ranges
+  `{offset, size}` relative to this input, or `null` for absent fields. Trailing
+  elements are not consumed. Empty input raises `FormatError` with Core's `END`.
+- `measure({tag, value})`: logical `{header, value, trailer, total}` sizes. For
+  content-independent Core formats, omit value bytes and pass `valueSize`
+  instead. Counts retain all 64 bits even when the wire would exceed wasm32.
+  Existing custom callback arguments are wasm32-sized; larger custom size-only
+  requests raise `RangeError` before a callback can receive a truncated value.
+- `encode({tag, value})`: newly allocated canonical bytes. Both tag and value
+  use `Uint8Array` (an absent tag can be `null`). If supplied, `valueSize` must
+  equal the supplied value's byte count.
+- `preserve(sourceBytes, {tag, value})`: decode the original first element and
+  invoke Core source preservation after comparing its semantic content.
+  Nonminimal accepted framing survives; changed content fails. This operation
+  re-decodes input using the live Format, so custom callbacks execute again.
+
+Format failures include `.format` with Core's region, optional offset and
+required extent, and partial tag/length/value ranges. Custom callback exceptions
+are rethrown unchanged. No operation retains caller input buffers or returns
+WASM heap views. Close Fields and Formats explicitly; `close()` is idempotent
+and operations on closed handles fail. A composition retains its Fields;
+Query and Document retain their Format even after its public handle closes.
+Callback functions stay alive until all dependent objects close. Reentrant
+Format operations and closing a Format during its callback are rejected.
+
+Run `node tests/format_fields.mjs <build>/dist` or CTest for binding tests covering
+configuration copies, errors, 64-bit marshalling, packed/tag-only layouts, source
+preservation, heap growth and dependent lifetimes. The same tests and runnable
+example execute against the installed private package in CI. Builtins parity,
+general Reader/Writer APIs and TypeScript declarations are outside #3.

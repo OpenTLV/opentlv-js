@@ -134,12 +134,139 @@ export function queryFacade(wasm) {
     return definitionResolver(scopes);
   }
   /** Owning native Format configuration. Callbacks receive copies; native Reader/Writer validate framing. */
+  // BEGIN generic-fields #3
+  // Generic fields retain immutable native configuration. No wire parsing in JS.
+  const fieldToken = Symbol("field"), composedToken = Symbol("composed format");
+  const fieldState = new WeakMap();
+  const customFormats = new WeakSet();
+  class FormatError extends Error {
+    constructor(code, detail = null, consumed = 0) {
+      super(wasm.UTF8ToString(wasm._opentlv_wasm_strerror(code)));
+      this.code = code; this.format = detail; this.consumed = consumed;
+      if (detail?.required != null) detail.required = unsignedResult(detail.required);
+    }
+  }
+  function unsigned(value) {
+    if (typeof value !== "bigint" && !Number.isSafeInteger(value)) throw new TypeError("safe integer or bigint required");
+    const n = BigInt(value);
+    if (n < 0n || n > 0xffffffffffffffffn) throw new RangeError("uint64 required");
+    return [Number(n & 0xffffffffn), Number(n >> 32n)];
+  }
+  function unsignedResult(value) {
+    const n = BigInt(value);
+    return n <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(n) : n;
+  }
+  function octet(value) { size(value); if (value > 255) throw new RangeError("byte required"); return value; }
+  function flag(value) { if (typeof value !== "boolean") throw new TypeError("boolean required"); return Number(value); }
+  function byteOrder(value = "big") {
+    if (!["big", "little"].includes(value)) throw new TypeError("big or little byte order required");
+    return value === "big" ? 1 : 0;
+  }
+  function fieldResponse(pointer) {
+    if (!pointer) throw new FormatError(OUT_OF_MEMORY);
+    try {
+      const result = JSON.parse(wasm.UTF8ToString(pointer));
+      if (result.code) throw new FormatError(result.code, result.format, result.consumed);
+      return result;
+    } finally { wasm._opentlv_wasm_free(pointer); }
+  }
+  function created(run) {
+    return temporary(new Uint8Array(4), error => {
+      const result = run(error);
+      const code = new DataView(wasm.HEAPU8.buffer).getUint32(error, true);
+      if (code) throw new FormatError(code);
+      if (!result) throw new FormatError(OUT_OF_MEMORY);
+      return result;
+    });
+  }
+  function fieldInfo(field) {
+    const state = fieldState.get(field);
+    if (!state) throw new TypeError("Field from this module required");
+    if (!state.pointer) throw new FormatError(INVALID_STATE);
+    return state;
+  }
+  class Field {
+    constructor(token, kind, config, forbidden = new Uint8Array()) {
+      if (token !== fieldToken) throw new TypeError("Use a Field factory");
+      const words = new Array(10).fill(0); config.forEach((v, i) => { words[i] = v; });
+      const pointer = temporaries([pointers(words), bytes(forbidden)], ([p, f]) =>
+        created(error => wasm._opentlv_wasm_field_new(kind, p, f, forbidden.length, error)));
+      fieldState.set(this, { pointer, kind });
+    }
+    static fixedIdentifier(width = 1) { return new Field(fieldToken, 0, [size(width)]); }
+    static variableIdentifier({ inline_mask = 31, escape = 31, continuation_bit = 128,
+      payload_mask = 127, max_size = 16, policy = null } = {}) {
+      return new Field(fieldToken, 1, [octet(inline_mask), octet(escape), octet(continuation_bit),
+        octet(payload_mask), size(max_size), Number(policy != null),
+        flag(policy?.reject_zero_first_payload ?? false), flag(policy?.require_minimal ?? false)],
+        policy?.forbidden_leading ?? new Uint8Array());
+    }
+    static fixedLength(width = 1, byte_order = "big") {
+      return new Field(fieldToken, 2, [size(width), byteOrder(byte_order)]);
+    }
+    static variableLength({ long_form_bit = 128, payload_mask = 127, byte_order = "big", policy = null } = {}) {
+      return new Field(fieldToken, 3, [octet(long_form_bit), octet(payload_mask), byteOrder(byte_order),
+        Number(policy != null), flag(policy?.allow_short ?? true), flag(policy?.allow_long ?? true),
+        flag(policy?.require_minimal ?? false), size(policy?.max_long_octets ?? 8),
+        ...unsigned(policy?.max_value ?? 0xffffffffffffffffn)]);
+    }
+    static escapedLength({ escape = 255, extended_size = 2, byte_order = "big",
+      min_extended = 255, max_length = 65535 } = {}) {
+      return new Field(fieldToken, 4, [octet(escape), size(extended_size), byteOrder(byte_order),
+        ...unsigned(min_extended), ...unsigned(max_length)]);
+    }
+    static packed({ storage_size = 1, bit_offset = 0, bit_width = 8, byte_order = "big" } = {}) {
+      return new Field(fieldToken, 5, [size(storage_size), size(bit_offset), size(bit_width), byteOrder(byte_order)]);
+    }
+    close() {
+      const state = fieldState.get(this);
+      if (state.pointer) wasm._opentlv_wasm_field_free(state.pointer);
+      state.pointer = 0;
+    }
+    read(input) {
+      const { kind } = fieldInfo(this); bytes(input);
+      const count = input.length;
+      const reply = temporary(input, data => fieldResponse(wasm._opentlv_wasm_field_operation(fieldInfo(this).pointer, 0, data, count, 0, 0)));
+      return kind < 2 ? { tag: unhex(reply.value), consumed: reply.consumed }
+        : { value: unsignedResult(reply.value), consumed: reply.consumed };
+    }
+    encode(value, storage = undefined) {
+      const { kind } = fieldInfo(this);
+      const input = kind < 2 ? bytes(value) : kind === 5 ? bytes(storage) : new Uint8Array();
+      const [low, high] = kind < 2 ? [0, 0] : unsigned(value);
+      const count = input.length;
+      return temporary(input, data => unhex(fieldResponse(
+        wasm._opentlv_wasm_field_operation(fieldInfo(this).pointer, 1, data, count, low, high)).value));
+    }
+  }
+  function createComposed({ kind, identifier, length, element_order = "tlv", length_scope = "value",
+    constructed = null, header_size = 0, tag_size = 0, tag_storage = new Uint8Array(), tag_only = [] }) {
+    const id = fieldInfo(identifier), len = fieldInfo(length);
+    if (!["tlv", "ltv"].includes(element_order) || !["value", "tag-and-value"].includes(length_scope))
+      throw new TypeError("invalid field order or length scope");
+    if (!Array.isArray(tag_only)) throw new TypeError("tag_only array required");
+    const tags = tag_only.map(bytes);
+    const storageSize = bytes(tag_storage).length;
+    const options = pointers([Number(element_order === "ltv"), Number(length_scope === "tag-and-value"),
+      Number(constructed != null), size(constructed?.byte_index ?? 0), octet(constructed?.mask ?? 0),
+      octet(constructed?.value ?? 0), size(header_size), size(tag_size)]);
+    return temporaries([options, bytes(tag_storage), pointers(tags.map(t => size(t.length))), ...tags],
+      ([p, storage, sizes, ...tagPointers]) => temporary(pointers(tagPointers), table => created(error =>
+        wasm._opentlv_wasm_composed_new(kind, id.pointer, len.pointer, p, storage, storageSize,
+          table, sizes, tags.length, error))));
+  }
+  function composedWithFields(kind, options, identifier, makeLength) {
+    let length;
+    try { length = makeLength(); return new Format(composedToken, { ...options, kind, identifier, length }); }
+    finally { identifier.close(); length?.close(); }
+  }
+  // END generic-fields #3
   class Format {
     constructor(name = "ber", options = {}) {
       const { tag_size = 1, length_size = 1, byte_order = "big", element_order = "tlv", length_scope = "value" } = options;
       if (!["big", "little"].includes(byte_order) || !["tlv", "ltv"].includes(element_order) ||
           !["value", "tag-and-value"].includes(length_scope)) throw new TypeError("invalid Fixed configuration");
-      this._pointer = temporary(string(name), pointer => wasm._opentlv_wasm_format_new(pointer,
+      this._pointer = name === composedToken ? createComposed(options) : temporary(string(name), pointer => wasm._opentlv_wasm_format_new(pointer,
         size(tag_size), size(length_size), Number(byte_order === "big"), Number(element_order === "ltv"), Number(length_scope === "tag-and-value")));
       if (!this._pointer) throw new QueryError(UNSUPPORTED);
       this._callbacks = []; this._references = 1; this._active = false; this._failed = false; this._error = null;
@@ -163,6 +290,7 @@ export function queryFacade(wasm) {
         if (classify !== undefined && typeof classify !== "function") throw new TypeError("isConstructed callback required");
         const constructed = classify ? callback((context, tag) => Number(Boolean(classify(tagBytes(tag)))), "iii") : 0;
         if (name === "custom") {
+          customFormats.add(this);
           const { decode, measure, encode } = options;
           if (typeof decode !== "function" || Boolean(measure) !== Boolean(encode) ||
               (measure && (typeof measure !== "function" || typeof encode !== "function"))) throw new TypeError("decode and optional measure/encode pair required");
@@ -190,6 +318,47 @@ export function queryFacade(wasm) {
         } else if (classify) check(wasm._opentlv_wasm_format_callbacks(owner, 0, 0, 0, constructed));
       } catch (error) { this.close(); throw error; }
     }
+    // BEGIN generic-format-operations #3
+    static compose(identifier, length, options = {}) {
+      return new Format(composedToken, { ...options, kind: 0, identifier, length });
+    }
+    static variable(options = {}) {
+      return composedWithFields(1, options, Field.variableIdentifier(options.identifier), () => Field.variableLength(options.length));
+    }
+    static escaped(options = {}) {
+      return composedWithFields(2, options, Field.fixedIdentifier(options.tag_size ?? 1), () => Field.escapedLength(options.length));
+    }
+    static packed(options = {}) {
+      return composedWithFields(3, options, Field.packed(options.tag), () => Field.packed(options.length));
+    }
+    _operation(operation, input = new Uint8Array(), element = {}) {
+      if (!this._pointer || this._active) throw new FormatError(INVALID_STATE);
+      const suppliedTag = element.tag, suppliedValue = element.value;
+      const tag = suppliedTag == null ? new Uint8Array() : bytes(suppliedTag);
+      const value = suppliedValue == null ? new Uint8Array() : bytes(suppliedValue);
+      if ((operation === 3 || operation === 4) && suppliedValue == null) throw new TypeError("value bytes required");
+      const logicalSize = element.valueSize ?? value.length;
+      if (suppliedValue != null && BigInt(logicalSize) !== BigInt(value.length)) throw new RangeError("valueSize differs from value bytes");
+      const [low, high] = unsigned(logicalSize);
+      if (high && customFormats.has(this)) throw new RangeError("custom callback valueSize must fit wasm32");
+      const inputSize = bytes(input).length, tagSize = tag.length;
+      return this._native(() => temporaries([input, tag, value], ([source, tagPointer, valuePointer]) => {
+        // User getters may close a handle while arguments are being copied.
+        if (!this._pointer || this._active) throw new FormatError(INVALID_STATE);
+        return fieldResponse(wasm._opentlv_wasm_format_operation(this._pointer, operation, source, inputSize,
+          suppliedTag == null ? 0 : tagPointer, tagSize, suppliedValue == null ? 0 : valuePointer, low, high)).value;
+      }));
+    }
+    get canRead() { return this._operation(0).canRead; }
+    get canWrite() { return this._operation(0).canWrite; }
+    decode(input) {
+      const result = this._operation(1, input);
+      return { ...result, tag: result.tag === null ? null : unhex(result.tag), value: unhex(result.value) };
+    }
+    measure(element) { return Object.fromEntries(Object.entries(this._operation(2, undefined, element)).map(([k, v]) => [k, unsignedResult(v)])); }
+    encode(element) { return unhex(this._operation(3, undefined, element)); }
+    preserve(input, element) { return unhex(this._operation(4, input, element)); }
+    // END generic-format-operations #3
     static fixed(options = {}) { return new Format("fixed", options); }
     static custom(options) { return new Format("custom", options); }
     _retain() { if (!this._pointer || this._active) throw new QueryError(INVALID_STATE); ++this._references; }
@@ -626,7 +795,7 @@ export function queryFacade(wasm) {
     setValue(value) { this._document._node(this, 4, bytes(value)); }
     erase() { this._get(5); }
   }
-  return { QueryProgram, QueryExecution, QuerySchema, QueryError, Document, Node, Format, V1Query, nameResolver, definitionResolver,
+  return { QueryProgram, QueryExecution, QuerySchema, QueryError, Document, Node, Format, Field, FormatError, V1Query, nameResolver, definitionResolver,
     compileQuery: (text, options) => new QueryProgram(text, options),
     loadQuery: (image, options) => QueryProgram.load(image, options),
     querySchema: (rules, options) => new QuerySchema(rules, options),

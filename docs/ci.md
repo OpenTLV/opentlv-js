@@ -110,6 +110,44 @@ The report changes no public API, ownership, lifecycle or error contract. Offici
 builds still enable all supported Core components and Builtins; Builtins parity
 remains outside the generic epic.
 
+### Generic Format/field update (#3)
+
+At the same Core pin, the new [public APIs](webassembly.md#generic-formats-and-field-encodings)
+raise the generic inventory to **109 referenced, 166 missing, 22 ignored**
+(109/275, 39.6%). Builtins stays at 19 referenced / 272 missing.
+All declarations in `tlv/field/{fixed,variable,escaped,packed}.h` and
+`tlv/format.h` now have meaningful binding references. Descriptor callbacks
+installed by bound initializers and equivalent specialized binary composition
+entry points have explicit exclusion reasons. They are exercised through
+Format operations, not artificially referenced to increase the count.
+
+This closes the Format/field workstream, not the general API epic: Reader/Writer,
+structural Schema, codecs and generation still require their own public API
+work. Generic tests run as CTests and against the installed archive.
+
+### Post-migration source evolution
+
+`ci/source-evolution.json` records reviewed changed/added source hashes and exact
+reversible changes for #3. The original migration inventory, build-adaptation
+hashes, Core pin and 57 bridge declarations remain immutable. The source
+verifier checks current additions, restores the recorded migration bytes in
+memory, and verifies those against the original hashes/Git objects. Unknown
+files, unrecorded edits and stale restoration rules fail verification.
+
+Full/Release still rebuild the historical Core target. Since additive features
+intentionally change current binaries, the runner also reconstructs and builds
+the completed standalone migration sources and requires their exact contract
+and all four output hashes to equal the historical Core build. A separate check
+compares the current public Emscripten runtime and ES-module namespaces, allowing
+only the five reviewed additional bridge exports. Current binary descriptors
+are recorded, but their minified names are not an ABI contract. Feature CTests,
+existing facade/ABI tests and installed-package tests run on the current build.
+Release continues to compare two independent **current** builds and archives.
+
+The evidence explicitly sets `current_is_migration_baseline: false`; historical
+byte equality must not be reported as current byte equality. This keeps the
+completed migration check distinct from post-migration feature validation.
+
 ## Core integration and ownership
 
 Each build uses default FetchContent selection and verifies `pinned-source`

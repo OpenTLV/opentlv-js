@@ -165,6 +165,8 @@ def check(build, output):
         runner.run("consumer", "node", consumer / "check.mjs")
         runner.run("installed-smoke", "node", ROOT / "tests/smoke.mjs", installed / "dist")
         runner.run("installed-example", "node", ROOT / "examples/parse.mjs", installed / "dist")
+        runner.run("installed-fields", "node", ROOT / "tests/format_fields.mjs", installed / "dist")
+        runner.run("installed-fields-example", "node", ROOT / "examples/fields.mjs", installed / "dist")
         if ci.read_selection(build) != selection:
             raise ValueError("Core selection changed during package checks")
         report.update(status="passed", version=metadata()["version"], files=hashes,
