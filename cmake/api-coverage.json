@@ -4,8 +4,20 @@
   "references": ["native/*.c", "native/*.h"],
   "ignore": [
     {
-      "reason": "The bridge uses tlv_reader_next_diag to retain structured parse diagnostics; tlv_reader_next is the same operation without diagnostic output. This does not establish a public streaming Reader API.",
-      "symbols": ["tlv_reader_next"]
+      "reason": "Reader.read/next use the source-and-diagnostic variants, which include the same semantic result, consumed extent and failure detail. The convenience and no-diagnostic variants do not add a separate JS operation.",
+      "symbols": ["tlv_reader_next", "tlv_read", "tlv_read_diag"]
+    },
+    {
+      "reason": "TreeReader.next/nextEvent and Reader.visit call diagnostic variants; these no-diagnostic entry points have the same traversal and callback behavior.",
+      "symbols": ["tlv_tree_reader_next", "tlv_tree_reader_next_event", "tlv_reader_visit"]
+    },
+    {
+      "reason": "TreeWriter begin/end/write/writeEvent use the diagnostic variants with identical state and ownership contracts; no-diagnostic aliases are not separate JS operations.",
+      "symbols": ["tlv_tree_writer_begin", "tlv_tree_writer_end", "tlv_tree_writer_write_element", "tlv_tree_writer_write_event"]
+    },
+    {
+      "reason": "Writer.encode/write/copyEncoded/preserve and measure use persistent element-based diagnostic operations. The one-shot, tag/value, copy-element and no-diagnostic convenience functions provide no additional behavior. Size-only logical measurement is already available through Format.measure({tag, valueSize}); Writer.measure accepts actual content for content-dependent formats.",
+      "symbols": ["tlv_element_encoded_size", "tlv_encoded_size", "tlv_write", "tlv_write_diag", "tlv_write_element", "tlv_write_element_diag", "tlv_writer_copy_element", "tlv_writer_copy_encoded", "tlv_writer_preserve", "tlv_writer_write", "tlv_writer_write_diag", "tlv_writer_write_element"]
     },
     {
       "reason": "V1Query passes UTF-8 bytes and their explicit length through tlv_query_parse_n; the NUL-terminated tlv_query_parse variant adds no separate JS operation.",

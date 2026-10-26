@@ -461,3 +461,149 @@ configuration copies, errors, 64-bit marshalling, packed/tag-only layouts, sourc
 preservation, heap growth and dependent lifetimes. The same tests and runnable
 example execute against the installed private package in CI. Builtins parity,
 general Reader/Writer APIs and TypeScript declarations are outside #3.
+
+## Reader, Writer and tree streams
+
+Issue #4 adds `Reader`, `TreeReader`, `Writer`, `TreeWriter`, `StreamError`,
+`StreamResult` and `Visit` to the object returned by `loadOpenTLV()`. These are
+JavaScript APIs; TypeScript declarations remain a separate distribution task.
+All parsing, traversal, encoding and wire validation runs in the pinned C Core.
+
+```js
+const { Reader, TreeReader, Writer, TreeWriter, Visit } = await loadOpenTLV();
+const reader = new Reader(new Uint8Array([4, 2]), { incremental: true });
+try {
+  console.log(reader.next().status); // "need-more-data"
+  reader.setInput(new Uint8Array([4, 2, 0xCA, 0xFE]), { final: true });
+  const { item } = reader.next();
+  console.log(Writer.encode(item)); // Uint8Array [4, 2, 202, 254]
+  console.log(reader.next().status); // "end"
+} finally { reader.close(); }
+```
+
+### Ownership and failures
+
+Every cursor owns its native buffers and retains its Format, including composed
+fields and JS callbacks. Input, tags and output returned to JavaScript are copies.
+They remain valid after input replacement, cursor advancement, `close()` or WASM
+memory growth. `close()` is idempotent and releases native storage; call it in
+`finally`. Closing the public Format handle does not invalidate existing cursors.
+There is no implicit finalizer or I/O. Avoid sharing a cursor across concurrent
+operations; callbacks must be synchronous. Reentry and closing the active cursor
+or using its Format from inside a Format callback fail with `INVALID_STATE`.
+
+Native failures throw `StreamError` with Core's numeric `code`; compare it with
+the frozen `StreamResult` constants. When available, `diagnostic` contains
+severity, location, path and contexts, and `reader` or `writer` contains operation
+and required/available sizes. Reader logical lengths exceeding the safe integer
+range are `bigint`. Coordinates and capacities are bounded by wasm32. Type and
+representation failures throw `TypeError` or `RangeError`. Original callback
+exceptions are rethrown unchanged, including non-Error thrown values.
+
+### Reader and incremental input
+
+`new Reader(bytes, {format = "ber", incremental = false})` accepts a format name
+or a live `Format` from the same loaded module. `Reader.read(bytes, options)`
+performs one pull and closes its temporary cursor.
+
+- `next()` returns `{status, code, item, consumed, offset, atEnd}`. Status is
+  `"ok"`, `"end"` or `"need-more-data"`; the latter two have `item: null`.
+  Need-more-data can also carry Reader diagnostics. An item has copied `tag`
+  (`Uint8Array` or `null`), `value`, `encoded`, absolute `offset`, and `source`
+  ranges (`header`, `tag`, `length`, `value`, `trailer`). Each present range is
+  `{offset, size}` relative to `item.encoded`; absent ranges are `null`.
+- `state` returns `{consumed, offset, atEnd}` without decoding. `consumed` is the
+  discardable prefix of the current input window; `offset` is absolute.
+- `setInput(bytes, {discard = 0, final = false})` replaces the contiguous window.
+  Preserve all old bytes after `discard`, then append new bytes. The binding
+  verifies prefix identity before calling Core. Only consumed bytes can be
+  discarded. Finalized input cannot be extended or reopened.
+- `reset(bytes = new Uint8Array(), {incremental = false})` abandons the current
+  input/traversal and starts at absolute offset zero, retaining Format and limits.
+
+Only successful pulls advance. Incomplete non-final input yields need-more-data;
+the same incomplete final input throws `TRUNCATED`. No partial element is exposed
+and no bytes are buffered beyond the explicitly supplied window. A failed input
+replacement leaves the old window intact.
+
+### Tree Reader and visitors
+
+`new TreeReader(bytes, options)` adds `frame_capacity=64`, `max_depth=64` and
+`max_elements=65536`. These are independent runtime limits; zero is allowed.
+Roots have depth zero. `next()` returns preorder nodes with `depth` and
+`constructed`, hiding closing events. `nextEvent()` instead returns nodes with
+`kind: "begin" | "element" | "end"`, `depth`, `offset` and `skipped`. An END
+has no tag/value/source payload. Empty containers produce BEGIN then END.
+Choose one projection per reset; mixing node/visitor and event pulls is rejected.
+
+`skipSubtree()` omits descendants of the last nonempty constructed item. In event
+mode it schedules an END with `skipped: true`. Descendants are not validated or
+counted. Parent publication waits for the complete encoded parent; this API does
+not emit early headers. Known END events precede need-more-data. Frame exhaustion
+and depth/count limits leave pending descent available for skipping or retry.
+
+`Reader.visit(callback)` and `TreeReader.visit(callback)` consume remaining nodes
+through Core's visitor adapters. The callback receives copied tag/value bytes;
+tree callbacks also receive depth and absolute offset. Return `Visit.CONTINUE`,
+`Visit.STOP` or `Visit.ERROR` explicitly. Promises and other returns are rejected.
+The return value contains `status: "ok"` for stop/final exhaustion or
+`"need-more-data"` for incomplete input. ERROR throws `StreamError` with
+`StreamResult.VISITOR`. The current node has already been consumed when the
+callback runs, including when it stops or throws; a later visit resumes at the
+next node. After stopping on a parent, resumption visits children unless skipped.
+Do not mutate the cursor from its callback.
+
+### Writer and bounded tree output
+
+`new Writer({format = "ber", capacity = 65536})` owns fixed output storage:
+
+- `write({tag, value})` appends a canonical semantic element, including a complete
+  constructed value. `Writer.encode(element, options)` is the one-shot equivalent.
+- `measure(element)` calls Core's content-aware measurement without advancing.
+  For size-only logical measurement, use `Format.measure({tag, valueSize})`.
+- `copyEncoded(bytes)` appends bytes without validating them.
+- `preserve(source, element = source)` accepts a Reader item with `encoded` bytes,
+  re-decodes its first element using this Writer's Format and asks Core to compare
+  semantic content before copying the original framing. Custom decoders run again.
+  Caller-supplied JS source ranges are ignored; source bytes must use the Writer's
+  format. Semantic changes fail rather than silently re-encoding.
+- `size`, `remaining` and `bytes` expose the written size, remaining capacity and
+  a fresh copy of output. Errors preserve the cursor and previously written prefix.
+
+`new TreeWriter(options)` adds `frame_capacity=64`, `max_depth=64`,
+`max_elements=65536`, `scratch_capacity=65536` and `tag_capacity=4096`:
+
+- `begin(tag)` copies an open constructed identifier into bounded tag storage;
+  `write(element)` appends a complete child; `end()` closes the innermost parent.
+- `writeEvent(event)` consumes the canonical TreeReader event shape. It checks
+  ordering, depth and destination classification. Skipped END events are rejected.
+  BEGIN's source value is ignored; children are rebuilt from later events.
+- `finish()` checks balanced closure and returns a copy of the output. It does
+  not seal the writer. `bytes` and `size` expose only completed root elements;
+  `remaining` accounts for provisional children as well.
+- `measure(element)` measures one complete element without advancing.
+
+Output, frames, scratch and open-tag storage never grow implicitly. An `end()`
+failure retains the open parent and accumulated bytes, including callback
+failure. Scratch must fit the largest closed value. Use a new writer with larger
+explicit capacities and replay input when storage is insufficient. There is no
+header patching or format-specific encoding in the binding. Format capabilities
+still apply: for example, the pinned `ber-indefinite` descriptor writes only
+constructed elements, while the ordinary BER reader accepts indefinite sources.
+
+`TreeWriter.measure(nodes, options)` accepts an array of preorder
+`{tag, value, depth, constructed}` items; constructed values are ignored.
+`TreeWriter.measureEvents(events, options)` accepts a balanced event array.
+Both call the corresponding Core measurement helper once with explicit bounded
+workspace and return `{size, bytes}` containing the exact staged encoding.
+They call both measure and encode callbacks. On storage failure, `StreamError`
+adds `requiredData` and `requiredScratch`: lower bounds for replay, not a promise
+of final capacity. No automatic callback replay occurs.
+
+Run `node examples/streaming.mjs <build>/dist` for an incremental event round trip.
+`tests/streaming.mjs` covers every chunk split, visitor stop/resume and errors,
+limits, prefix validation, balanced events, preservation, measurement, rollback,
+retained formats, copied results and memory growth. CTest and private-package
+checks run these tests and the example. See the [coverage inventory](ci.md#readerwriter-inventory-4)
+for pinned symbols and equivalent C entry points. Browser/worker execution and
+TypeScript declaration support require their own validation.

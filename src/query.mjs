@@ -370,6 +370,219 @@ export function queryFacade(wasm) {
       if (this._pointer) { wasm._opentlv_wasm_format_free(this._pointer); this._pointer = 0; this._release(); }
     }
   }
+  // BEGIN streaming #4
+  const streamState = new WeakMap();
+  const StreamResult = Object.freeze({ ...constants.result });
+  const Visit = Object.freeze({ CONTINUE: 0, STOP: 1, ERROR: 2 });
+  class StreamError extends Error {
+    constructor(code, reply = {}) {
+      super(wasm.UTF8ToString(wasm._opentlv_wasm_strerror(code)));
+      this.code = code;
+      for (const key of ["diagnostic", "reader", "writer", "requiredData", "requiredScratch"])
+        if (reply[key] !== undefined) this[key] = reply[key];
+    }
+  }
+  function streamCheck(code) { if (code) throw new StreamError(code); }
+  function streamReply(pointer) {
+    if (!pointer) throw new StreamError(OUT_OF_MEMORY);
+    try {
+      const reply = JSON.parse(wasm.UTF8ToString(pointer));
+      for (const key of ["declared_length", "required"])
+        if (reply.reader?.[key] !== undefined) reply.reader[key] = unsignedResult(reply.reader[key]);
+      if (reply.code && reply.code !== END && reply.code !== constants.result.NEED_MORE_DATA)
+        throw new StreamError(reply.code, reply);
+      reply.status = reply.code === END ? "end" : reply.code === constants.result.NEED_MORE_DATA ? "need-more-data" : "ok";
+      return reply;
+    } finally { wasm._opentlv_wasm_free(pointer); }
+  }
+  function streamItem(item) {
+    if (item === null) return null;
+    if (item.element) {
+      item.tag = item.element.tag === null ? null : unhex(item.element.tag);
+      item.value = unhex(item.element.value);
+    }
+    delete item.element;
+    if (item.encoded !== undefined) item.encoded = unhex(item.encoded);
+    return item;
+  }
+  function liveStream(object) {
+    const state = streamState.get(object);
+    if (!state) throw new TypeError("Reader/Writer from this module required");
+    if (!state.pointer || state.active || state.format._active) throw new StreamError(INVALID_STATE);
+    return state;
+  }
+  function streamRun(object, run) {
+    const state = liveStream(object); state.active = true;
+    try { return state.format._native(() => run(state.pointer, state)); }
+    finally { state.active = false; }
+  }
+  class Stream {
+    constructor(kind, input, options) {
+      const { format = "ber", incremental = false, frame_capacity = 64, max_depth = 64,
+        max_elements = 65536, scratch_capacity = 65536, tag_capacity = 4096 } = options;
+      const inputSize = kind < 2 ? bytes(input).length : size(input);
+      const config = pointers([flag(incremental), size(frame_capacity), size(max_depth),
+        size(max_elements), size(scratch_capacity), size(tag_capacity)]);
+      const own = !(format instanceof Format), owner = own ? new Format(format) : format;
+      owner._retain();
+      let pointer = 0;
+      try {
+        pointer = temporaries([kind < 2 ? input : new Uint8Array(), config], ([data, p]) =>
+          temporary(new Uint8Array(4), error => {
+            const result = wasm._opentlv_wasm_stream_new(owner._pointer, kind, data, inputSize, p, error);
+            streamCheck(new DataView(wasm.HEAPU8.buffer).getUint32(error, true));
+            if (!result) throw new StreamError(OUT_OF_MEMORY);
+            return result;
+          }));
+        streamState.set(this, { pointer, format: owner, kind, active: false, projection: null });
+      } finally {
+        if (!pointer) owner._release();
+        if (own) owner.close();
+      }
+    }
+    close() {
+      const state = streamState.get(this);
+      if (!state) throw new TypeError("Reader/Writer from this module required");
+      if (state.active || state.format._active) throw new StreamError(INVALID_STATE);
+      if (state.pointer) {
+        wasm._opentlv_wasm_stream_free(state.pointer); state.pointer = 0; state.format._release();
+      }
+    }
+  }
+  class InputStream extends Stream {
+    _pull(event) {
+      return streamRun(this, (pointer, state) => {
+        const projection = event ? "events" : "nodes";
+        if (state.kind === 1 && state.projection && state.projection !== projection)
+          throw new StreamError(INVALID_STATE);
+        state.projection = projection;
+        const reply = streamReply(wasm._opentlv_wasm_stream_read(pointer, Number(event)));
+        return { ...reply, item: streamItem(reply.item) };
+      });
+    }
+    next() { return this._pull(false); }
+    get state() {
+      return streamRun(this, pointer => {
+        const { consumed, offset, atEnd } = streamReply(wasm._opentlv_wasm_stream_read(pointer, 3));
+        return { consumed, offset, atEnd };
+      });
+    }
+    setInput(input, { discard = 0, final = false } = {}) {
+      bytes(input); size(discard); flag(final);
+      return streamRun(this, pointer => temporary(input, data =>
+        streamCheck(wasm._opentlv_wasm_stream_input(pointer, data, input.length, discard, Number(final), 0))));
+    }
+    reset(input = new Uint8Array(), { incremental = false } = {}) {
+      bytes(input); flag(incremental);
+      return streamRun(this, (pointer, state) => temporary(input, data => {
+        streamCheck(wasm._opentlv_wasm_stream_input(pointer, data, input.length, 0, Number(!incremental), 1));
+        state.projection = null;
+      }));
+    }
+    visit(visitor) {
+      if (typeof visitor !== "function") throw new TypeError("visitor callback required");
+      return streamRun(this, (pointer, state) => {
+        if (state.projection === "events") throw new StreamError(INVALID_STATE);
+        state.projection = "nodes";
+        let failed = false, failure;
+        const callback = wasm.addFunction(json => {
+          try {
+            const item = streamItem(JSON.parse(wasm.UTF8ToString(json)));
+            if (state.kind === 0) { delete item.depth; delete item.offset; }
+            const result = visitor(item);
+            if (!Object.values(Visit).includes(result)) throw new TypeError("Return a Visit constant synchronously");
+            return result;
+          } catch (error) { failed = true; failure = error; return Visit.ERROR; }
+        }, "ii");
+        try { return streamReply(wasm._opentlv_wasm_stream_visit(pointer, callback)); }
+        finally { wasm.removeFunction(callback); if (failed) throw failure; }
+      });
+    }
+  }
+  class Reader extends InputStream {
+    constructor(input = new Uint8Array(), options = {}) { super(0, input, options); }
+    static read(input, options = {}) {
+      const reader = new Reader(input, options);
+      try { return reader.next(); } finally { reader.close(); }
+    }
+  }
+  class TreeReader extends InputStream {
+    constructor(input = new Uint8Array(), options = {}) { super(1, input, options); }
+    nextEvent() { return this._pull(true); }
+    skipSubtree() { return streamRun(this, p => streamReply(wasm._opentlv_wasm_stream_read(p, 2))); }
+  }
+  function streamWrite(object, operation, element = {}, encoded = new Uint8Array(), event = {}) {
+    // Snapshot getters before entering native code, then check lifetime again.
+    const suppliedTag = element.tag, suppliedValue = element.value;
+    const tag = suppliedTag == null ? new Uint8Array() : bytes(suppliedTag);
+    const value = suppliedValue == null ? new Uint8Array() : bytes(suppliedValue);
+    bytes(encoded);
+    if ((operation === 0 || operation === 2 || operation === 8) && suppliedValue == null)
+      throw new TypeError("value bytes required");
+    const kind = event.kind ?? 0, depth = size(event.depth ?? 0), skipped = flag(event.skipped ?? false);
+    return streamRun(object, pointer => temporaries([tag, value, encoded], ([t, v, e]) =>
+      streamReply(wasm._opentlv_wasm_stream_write(pointer, operation, suppliedTag == null ? 0 : t,
+        tag.length, v, value.length, e, encoded.length, kind, depth, skipped))));
+  }
+  class OutputStream extends Stream {
+    write(element) { streamWrite(this, 0, element); }
+    measure(element) { return streamWrite(this, 8, element).measured; }
+    get size() { return streamWrite(this, 9).size; }
+    get remaining() { return streamWrite(this, 9).remaining; }
+    get bytes() { return unhex(streamWrite(this, 6).value); }
+  }
+  class Writer extends OutputStream {
+    constructor({ capacity = 65536, ...options } = {}) { super(2, size(capacity), options); }
+    static encode(element, options = {}) {
+      const writer = new Writer(options);
+      try { writer.write(element); return writer.bytes; } finally { writer.close(); }
+    }
+    copyEncoded(encoded) { streamWrite(this, 1, {}, bytes(encoded)); }
+    preserve(source, element = source) {
+      // Re-decode the owned encoding through this Writer's Format; never trust JS ranges.
+      streamWrite(this, 2, element, bytes(source.encoded));
+    }
+  }
+  function eventKind(kind) {
+    const result = ["begin", "element", "end"].indexOf(kind);
+    if (result < 0) throw new TypeError("begin, element or end event required");
+    return result;
+  }
+  class TreeWriter extends OutputStream {
+    constructor({ capacity = 65536, ...options } = {}) { super(3, size(capacity), options); }
+    begin(tag) { streamWrite(this, 3, { tag: bytes(tag) }); }
+    end() { streamWrite(this, 4); }
+    finish() { streamWrite(this, 5); return this.bytes; }
+    writeEvent(event) {
+      const kind = eventKind(event.kind);
+      if (kind === 1) bytes(event.value);
+      streamWrite(this, 7, event, undefined, { kind, depth: event.depth, skipped: event.skipped });
+    }
+    static measure(items, options = {}) { return measureTree(items, options, false); }
+    static measureEvents(events, options = {}) { return measureTree(events, options, true); }
+  }
+  function measureTree(items, options, events) {
+    if (!Array.isArray(items)) throw new TypeError("array of nodes/events required");
+    // Snapshot input once. Keep all Tags alive until Core's one-shot measurement finishes.
+    const entries = items.map(item => {
+      const kind = events ? eventKind(item.kind) : flag(item.constructed ?? false) ? 0 : 1;
+      const tag = item.tag == null ? null : bytes(item.tag).slice();
+      const value = kind === 1 ? bytes(item.value).slice() : new Uint8Array();
+      return { kind, depth: size(item.depth), tag, value, skipped: flag(item.skipped ?? false) };
+    });
+    const writer = new TreeWriter(options);
+    try {
+      return streamRun(writer, pointer => temporaries(entries.flatMap(e => [e.tag ?? new Uint8Array(), e.value]), ptrs => {
+        const records = pointers(entries.flatMap((e, i) => [e.kind, e.depth, e.tag === null ? 0 : ptrs[2 * i],
+          e.tag?.length ?? 0, ptrs[2 * i + 1], e.value.length, e.skipped]));
+        return temporary(records, data => {
+          const reply = streamReply(wasm._opentlv_wasm_stream_measure(pointer, data, entries.length, Number(events)));
+          return { size: reply.size, bytes: unhex(reply.value) };
+        });
+      }));
+    } finally { writer.close(); }
+  }
+  // END streaming #4
   class QueryProgram {
     constructor(text, options = {}, image = false) {
       if (!image && typeof text !== "string") throw new TypeError("Query text must be string");
@@ -795,7 +1008,7 @@ export function queryFacade(wasm) {
     setValue(value) { this._document._node(this, 4, bytes(value)); }
     erase() { this._get(5); }
   }
-  return { QueryProgram, QueryExecution, QuerySchema, QueryError, Document, Node, Format, Field, FormatError, V1Query, nameResolver, definitionResolver,
+  return { Reader, TreeReader, Writer, TreeWriter, StreamError, StreamResult, Visit, QueryProgram, QueryExecution, QuerySchema, QueryError, Document, Node, Format, Field, FormatError, V1Query, nameResolver, definitionResolver,
     compileQuery: (text, options) => new QueryProgram(text, options),
     loadQuery: (image, options) => QueryProgram.load(image, options),
     querySchema: (rules, options) => new QuerySchema(rules, options),
