@@ -107,3 +107,15 @@ if(OPENTLV_BUILD_WASM_TESTS AND OPENTLV_NODE_EXECUTABLE)
         PROPERTIES LABELS "integration;wasm")
 endif()
 # END document-schema #5
+
+# BEGIN codecs-generator #6
+target_sources(opentlv-wasm PRIVATE native/codecs_generator.h)
+if(OPENTLV_BUILD_WASM_TESTS AND OPENTLV_NODE_EXECUTABLE)
+    add_test(NAME Integration_wasm_codecs_generator
+        COMMAND ${OPENTLV_NODE_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tests/codecs_generator.mjs" "${_wasm_output_dir}")
+    add_test(NAME Integration_example_wasm_codecs_generator
+        COMMAND ${OPENTLV_NODE_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/examples/codecs_generator.mjs" "${_wasm_output_dir}")
+    set_tests_properties(Integration_wasm_codecs_generator Integration_example_wasm_codecs_generator
+        PROPERTIES LABELS "integration;wasm")
+endif()
+# END codecs-generator #6

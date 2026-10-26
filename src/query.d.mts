@@ -121,7 +121,8 @@ export interface V1Query extends Owned {
 }
 export interface Element { tag: Uint8Array; value?: Uint8Array | null; valueSize?: Integer }
 export interface ByteRange { offset: number; size: number }
-export interface Decoded { tag: Uint8Array; header: ByteRange; value: ByteRange; trailer?: ByteRange; tagRange?: ByteRange | null; lengthRange?: ByteRange | null }
+export interface Decoded { tag: Uint8Array | null; header: ByteRange; value: ByteRange; trailer?: ByteRange; tagRange?: ByteRange | null; lengthRange?: ByteRange | null }
+export interface CustomElement extends Omit<Element, 'tag'> { tag: Uint8Array | null }
 export interface FormatOptions {
   tag_size?: number; length_size?: number; byte_order?: 'big' | 'little';
   element_order?: 'tlv' | 'ltv'; length_scope?: 'value' | 'tag-and-value';
@@ -129,8 +130,8 @@ export interface FormatOptions {
 }
 export interface CustomFormatOptions extends FormatOptions {
   decode: (input: Uint8Array) => Decoded | { code: number };
-  measure?: (element: Element) => { header: number; value?: number; trailer?: number } | { code: number };
-  encode?: (element: Element) => Uint8Array | { code: number };
+  measure?: (element: CustomElement) => { header: number; value?: number; trailer?: number } | { code: number };
+  encode?: (element: CustomElement) => Uint8Array | { code: number };
 }
 export interface Format extends Owned {
   readonly canRead: boolean; readonly canWrite: boolean;
@@ -161,7 +162,44 @@ export interface Writer extends Owned {
 export interface TreeWriter extends Omit<Writer, 'copyEncoded' | 'preserve'> {
   begin(tag: Uint8Array): void; end(): void; finish(): Uint8Array; writeEvent(event: StreamItem): void;
 }
+export type CodecInteger = number | bigint;
+export interface Codec<T, I = T> extends Owned {
+  decode(input: Uint8Array): T;
+  encode(value: I, options?: { capacity?: number }): Uint8Array;
+  measure(value: I): number;
+}
+export interface IPv4ListCodec extends Codec<Uint8Array> { at(input: Uint8Array, index: number): Uint8Array }
+export interface NumberCodecOptions { encoding?: 'big' | 'little' | 'bcd'; width?: number; digits?: number }
+export interface SchemaNumberCodecOptions extends NumberCodecOptions {
+  min_length?: number; max_length?: number; length_multiple?: number; endpoints?: boolean;
+}
+export interface CodecError extends Error { readonly code: number; readonly diagnostic: Diagnostic | null; readonly codec: Record<string, unknown> | null }
+export interface StructureCodecOptions<T> {
+  format?: FormatInput; schema?: SchemaTable; max_depth?: number; max_elements?: number;
+  decode?: (input: Uint8Array) => T; encode?: (value: T) => Uint8Array;
+}
+export interface GeneratorCandidate { tag: Uint8Array | null; min_value_size?: number; max_value_size?: number }
+export interface GeneratorOptions {
+  format?: FormatInput; candidates: readonly GeneratorCandidate[]; seed?: CodecInteger;
+  max_elements?: number; max_depth?: number; max_value_size?: number; max_case_size?: number;
+}
+export interface Generator extends Owned {
+  readonly version: number; readonly workspaceSize: number; generate(case_index?: CodecInteger): Uint8Array;
+}
 export interface QueryAPI {
+  Codec: {
+    builtin(name: 'uint8' | 'uint16-be' | 'uint16-le' | 'uint32-be' | 'uint32-le'): Codec<number, CodecInteger>;
+    builtin(name: 'int64-minimal-be'): Codec<bigint, CodecInteger>;
+    builtin(name: 'bytes' | 'ipv4'): Codec<Uint8Array>;
+    builtin(name: 'ipv4-list'): IPv4ListCodec;
+    number(options?: NumberCodecOptions): Codec<bigint, CodecInteger>;
+    schemaNumber(options?: SchemaNumberCodecOptions): Codec<bigint, CodecInteger>;
+    digits(options?: { width?: number }): Codec<string>;
+    text(options?: { alphabet?: 'printable' | 'alnum'; width?: number; zero_padding?: boolean }): Codec<string>;
+  };
+  CodecError: { readonly prototype: CodecError; new(reply: Record<string, unknown>): CodecError };
+  StructureCodec: new<T>(options?: StructureCodecOptions<T>) => Codec<T>;
+  Generator: new(options: GeneratorOptions) => Generator;
   Document: { new(input: Uint8Array | null, options?: DocumentOptions): Document; create(options?: DocumentOptions): Document };
   /** Obtain Nodes from a Document or Query selection. */
   Node: { readonly prototype: Node };

@@ -171,6 +171,11 @@ structural validation and copied diagnostics. Run
 The package includes declarations for these APIs and checks installed consumers
 in TypeScript NodeNext and Bundler resolution modes.
 
+The [generic Codec and wire Generator API](docs/webassembly.md#generic-codecs-and-wire-generator)
+adds integer, BCD, digit, text, byte and IPv4 conversion, Schema-number composition,
+validated application-object adapters and deterministic random-access wire cases.
+Run `node examples/codecs_generator.mjs <build>/dist` for a BCD and generation example.
+
 ## Private package and version
 
 [package.json](package.json) defines the independent JS version, initially

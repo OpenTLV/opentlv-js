@@ -37,3 +37,25 @@ new api.Node();
 // @ts-expect-error context is an ordinal, not a Node
 query.execution().context(node);
 schema.close(); builder.close(); query.close(); document.close();
+const integerCodec = api.Codec.number({ encoding: 'bcd', digits: 12 });
+const integer: bigint = integerCodec.decode(integerCodec.encode(123n));
+const byteCodec = api.Codec.builtin('uint8');
+const byte: number = byteCodec.decode(byteCodec.encode(255));
+const ip: Uint8Array = api.Codec.builtin('ipv4-list').at(hexToBytes('C0000201'), 0);
+const text: string = api.Codec.text().decode(hexToBytes('41'));
+const objectCodec = new api.StructureCodec<{ id: number }>({
+  decode: data => ({ id: data[2]! }), encode: value => Uint8Array.of(4, 1, value.id),
+});
+const object: { id: number } = objectCodec.decode(objectCodec.encode({ id: 7 }));
+const generator = new api.Generator({ candidates: [{ tag: hexToBytes('04') }], seed: (1n << 64n) - 1n });
+const wire: Uint8Array = generator.generate(7n);
+void integer; void byte; void ip; void text; void object; void wire;
+// @ts-expect-error typed numeric codec does not accept a string
+integerCodec.encode('123');
+// @ts-expect-error text codec requires text
+api.Codec.text().encode(1);
+// @ts-expect-error explicit ordered candidate table is required
+new api.Generator({ seed: 1n });
+// @ts-expect-error object shape is checked
+objectCodec.encode({ id: '7' });
+integerCodec.close(); byteCodec.close(); objectCodec.close(); generator.close();

@@ -618,12 +618,12 @@ int opentlv_wasm_format_decoded(opentlv_wasm_format_t* owner, tlv_decoded_t* res
         owner->tags = pin;
     }
     memset(result, 0, sizeof *result);
-    result->element.tag = tlv_tag(pin->data, tag_size);
+    result->element.tag = tlv_tag(tag ? pin->data : NULL, tag_size);
     result->element.value.data = input + fields[3].offset;
     result->element.value.size = fields[3].size;
     result->source = (tlv_source_t){
         input,     extent,    fields[0],       fields[1],      fields[2],
-        fields[3], fields[4], result->element, &owner->format, TLV_TAG_BINDING_FORMAT};
+        fields[3], fields[4], result->element, &owner->format, tag ? TLV_TAG_BINDING_FORMAT : TLV_TAG_BINDING_SOURCE};
     return TLV_OK;
 }
 size_t opentlv_wasm_element_field(const tlv_element_t* e, int field) {
@@ -1859,3 +1859,6 @@ const char* opentlv_wasm_document_node(opentlv_wasm_document_t* doc, size_t addr
 
 /* Post-migration Document/Schema boundary. */
 #include "document_schema.h"
+
+/* Post-migration Codec/Generator boundary. */
+#include "codecs_generator.h"
