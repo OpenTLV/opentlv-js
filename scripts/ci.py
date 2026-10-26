@@ -12,6 +12,7 @@ import subprocess
 import sys
 
 import core_dependency as core
+import migration_compatibility
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUTS = ("opentlv-core.js", "opentlv-core.wasm", "opentlv.mjs", "query.mjs")
@@ -195,6 +196,9 @@ def execute(tier, configuration, output):
             if report["builds"]["first"]["package"] != report["builds"]["second"]["package"]:
                 raise ValueError("Private package archives are not reproducible")
             report["reproducibility_verified"] = True
+        if tier in ("full", "release") and configuration == "Release":
+            report["migration_compatibility"] = migration_compatibility.check(
+                runner, output, output / "first")
         report["status"] = "passed"
     except Exception as error:
         report["error"] = str(error)

@@ -167,12 +167,33 @@ class RunnerTests(unittest.TestCase):
     def test_only_release_requires_two_builds(self):
         for tier in ci.TIERS:
             with self.subTest(tier=tier), patch.object(ci.Runner, "run", self.fake_command), \
-                    patch.object(ci, "build_and_check", side_effect=self.fake_build) as build:
+                    patch.object(ci, "build_and_check", side_effect=self.fake_build) as build, \
+                    patch.object(ci.migration_compatibility, "check", return_value={"status": "passed"}) as migration:
                 result = ci.execute(tier, "Release", self.root / tier)
                 self.assertEqual(build.call_count, 2 if tier == "release" else 1)
                 self.assertEqual(result["status"], "passed")
                 self.assertEqual(result["reproducibility_verified"], tier == "release")
                 self.assertFalse(result["release_verified"])
+                self.assertEqual(migration.call_count, int(tier in ("full", "release")))
+
+    def test_migration_mismatch_cannot_pass_full(self):
+        output = self.root / "migration-mismatch"
+        with patch.object(ci.Runner, "run", self.fake_command), \
+                patch.object(ci, "build_and_check", side_effect=self.fake_build), \
+                patch.object(ci.migration_compatibility, "check", side_effect=ValueError("contract mismatch")):
+            with self.assertRaisesRegex(ValueError, "contract mismatch"):
+                ci.execute("full", "Release", output)
+        result = json.loads((output / "evidence/result.json").read_text())
+        self.assertEqual(result["status"], "failed")
+        self.assertNotIn("migration_compatibility", result)
+
+    def test_debug_does_not_compare_release_baseline(self):
+        with patch.object(ci.Runner, "run", self.fake_command), \
+                patch.object(ci, "build_and_check", side_effect=self.fake_build), \
+                patch.object(ci.migration_compatibility, "check") as migration:
+            result = ci.execute("full", "Debug", self.root / "debug")
+        self.assertEqual(result["status"], "passed")
+        migration.assert_not_called()
 
     def test_second_build_failure_cannot_pass_release(self):
         output = self.root / "release"

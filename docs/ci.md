@@ -18,6 +18,11 @@ Emscripten environment, so the SDK's bundled Node cannot silently replace it.
 | JS Full CI | Manual or reusable workflow call | Release and Debug, each with the same checks; upload outputs |
 | JS Release reproducibility | Version-shaped tag push or manual rehearsal | Two fresh Release builds, all checks in each, compare all four output and private package hashes |
 
+Full's Release configuration and the Release workflow additionally rebuild the
+historical Core WASM target and require migration compatibility as described
+below. Debug retains its own runtime/package checks without comparison to a
+Release binary.
+
 Each workflow also runs the migration verifier, Python infrastructure
 regressions and actionlint 1.7.7. The reusable `js-checks.yml` provides a final
 `JS quality gate` that requires every infrastructure and runtime job to succeed;
@@ -91,6 +96,37 @@ metadata and file hashes. Node's bundled npm is required and its version is
 recorded in each package report.
 
 ## Evidence
+
+### Executable migration comparison (#14)
+
+`scripts/migration_compatibility.py` rebuilds the original WASM target from the
+verified Core checkout at `a9a6f9470c2b285744738b40196bef9d0341fead`, using the
+Release flags in the immutable source inventory and a fresh
+`migration-baseline/` build directory. Historical bridge/helper inputs are
+checked for exact file membership and SHA-256 before configuration and after
+comparison. The standalone source verifier also compares its ten transferred
+files with the original Git objects. The historical build runs its two CTests.
+
+`scripts/inspect_wasm.mjs` compiles the actual WASM binary, records its export
+and import names/kinds, imports the three ES modules and initializes the
+Emscripten factory using the adjacent binary. It compares namespace names/types
+and the initialized runtime surface, including all 57 public bridge functions.
+This uses runtime bridge names because optimized binary exports are minified.
+Both builds must have equal contracts and equal SHA-256 hashes for **every one
+of the four outputs**. A mismatch fails the overall Full/Release run.
+
+The CI result includes `migration_compatibility` only after this check succeeds;
+`migration-*-contract.json` and command logs accompany the report. This is
+distinct from double-build reproducibility: the latter compares two standalone
+builds and their private archives; migration compares the old and new build
+systems. Future intentional runtime changes or a Core/toolchain upgrade need a
+reviewed replacement for this migration gate, retaining the historical record.
+Neither check establishes browser/worker execution or release authorization.
+
+See the [dated migration acceptance review](../MIGRATION.md#validation-review-14)
+for cross-repository pins, hosted evidence, deviations and remaining gates.
+
+### Run receipts
 
 `evidence/result.json` records the tier, configuration, checkout commit/dirty
 state, tool versions, GitHub repository/SHA/ref/run/attempt when present, Core

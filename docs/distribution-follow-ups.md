@@ -7,6 +7,11 @@ This versioned register tracks the scope without creating remote issues or
 claiming publication readiness. Each item needs a separately approved
 implementation before the private-package restriction can change.
 
+Reviewed for #14 on 2026-10-26: all items remain open. The
+[migration assessment](../MIGRATION.md#validation-review-14) records compatibility
+and the outstanding coordinated gates; local archive validation does not
+complete any publication item.
+
 ## NPM-1: Registry publication (open)
 
 - Decide and verify registry name/scope ownership; the local `opentlv-js` name
@@ -39,3 +44,13 @@ implementation before the private-package restriction can change.
 - Keep wrapper semantics, Core ownership and WASM memory/lifetime contracts;
   coordinate API coverage with [#1](https://github.com/OpenTLV/opentlv-js/issues/1)
   and Docs integration with [#13](https://github.com/OpenTLV/opentlv-js/issues/13).
+
+## MOD-1: Post-migration modernization (open)
+
+- Review Core pin and Emscripten/Node upgrades separately from source extraction.
+- Replace the historical binary-equality gate deliberately when an intentional
+  dependency/runtime change requires it, preserving the immutable baseline and
+  adding evidence for the new compatibility contract.
+- Keep API redesign and broader facade coverage separate from the migration's
+  behavior-preservation result; TypeScript and browser/worker coverage remain
+  tracked under DIST-1.
