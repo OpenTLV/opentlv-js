@@ -74,3 +74,15 @@ if(OPENTLV_BUILD_WASM_TESTS AND OPENTLV_NODE_EXECUTABLE)
         PROPERTIES LABELS "integration;wasm")
 endif()
 # END generic-fields #3
+
+# BEGIN streaming #4
+target_sources(opentlv-wasm PRIVATE native/streaming.h)
+if(OPENTLV_BUILD_WASM_TESTS AND OPENTLV_NODE_EXECUTABLE)
+    add_test(NAME Integration_wasm_streaming
+        COMMAND ${OPENTLV_NODE_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tests/streaming.mjs" "${_wasm_output_dir}")
+    add_test(NAME Integration_example_wasm_streaming
+        COMMAND ${OPENTLV_NODE_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/examples/streaming.mjs" "${_wasm_output_dir}")
+    set_tests_properties(Integration_wasm_streaming Integration_example_wasm_streaming
+        PROPERTIES LABELS "integration;wasm")
+endif()
+# END streaming #4

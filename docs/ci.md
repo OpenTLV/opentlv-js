@@ -264,6 +264,43 @@ Local runs report `hosted: false`. They can establish local smoke, facade, ABI
 and reproducibility results, but cannot establish a successful hosted PR/Main/
 Full run, tag-triggered execution, branch protection or publication.
 
+## Reader/Writer inventory (#4)
+
+Against Core `a9a6f9470c2b285744738b40196bef9d0341fead`, the pre-#4 reference
+inventory had no public JS streaming cursor. The bridge referenced Reader only
+through parsing and Query integration. Issue #4 accounts for all functions in
+`reader/reader.h`, `reader/tree.h`, `reader/visitor.h`, `writer/writer.h`,
+`writer/tree.h` and `reader/diagnostic.h` through public operations or reviewed
+equivalent entry points in `cmake/api-coverage.json`:
+
+| Core area | Public JS operation |
+| --- | --- |
+| Reader initialization, pull/source diagnostics, window replacement and state | `Reader`, `Reader.read`, `next`, `setInput`, `reset`, `state` |
+| Tree initialization, node/event projection, skipping and state | `TreeReader`, `next`, `nextEvent`, `skipSubtree`, `setInput`, `reset`, `state` |
+| Sequential/tree visitors | `Reader.visit`, `TreeReader.visit`, `Visit` |
+| Writer measure/write/copy/preserve and state | `Writer`, `Writer.encode`, `measure`, `write`, `copyEncoded`, `preserve`, `size`, `remaining`, `bytes` |
+| Tree output, copied open tags, events and completion | `TreeWriter`, `begin`, `write`, `end`, `writeEvent`, `finish` |
+| Preorder/event measurement and staging | `TreeWriter.measure`, `TreeWriter.measureEvents` |
+| Reader/Writer diagnostics | `StreamError`, need-more-data replies, `StreamResult` |
+
+The exclusions cover convenience functions and variants without diagnostics:
+the JS operations use the richer source/element/diagnostic variants. Logical
+size-only measurement is already available via `Format.measure`. They do not
+exclude streaming behavior or entire headers. The generated report remains
+informational; references alone do not prove functional parity. Run:
+
+```sh
+python -B scripts/api_coverage.py --core ../opentlv --output build/api-coverage/report.json
+node tests/streaming.mjs <build>/dist
+```
+
+Each CI tier runs the streaming suite and example through CTest and again against
+the installed private archive. Full/Release also verifies current additive WASM
+exports and reconstructs historical sources from `ci/source-evolution.json`;
+the immutable migration inventory is unchanged. Limits, callback exceptions,
+memory growth, owned snapshots, every fixture split, balanced events and bounded
+measurement are binding-owned runtime regressions. These checks execute in Node.
+
 ## Documentation updates
 
 JS owns [the WASM manual](webassembly.md), the unchanged

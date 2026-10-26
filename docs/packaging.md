@@ -27,7 +27,8 @@ python -B scripts/package.py --build build-wasm --output build/package-check
 Use the default pinned Core build. The command verifies its live source receipt
 and rejects sibling development overrides. It checks all four nonempty outputs
 in `<build>/dist/`, the WASM header and wrapper equality with `src/*.mjs`.
-It runs `tests/smoke.mjs` and `examples/parse.mjs` against the installed package.
+It runs the smoke, Format/field and Reader/Writer streaming suites and their
+parse, fields and streaming examples against the installed package.
 These checks establish local package consistency, not attestation of arbitrary
 prebuilt binaries. CI builds the inputs afresh before packaging.
 
@@ -41,8 +42,9 @@ expected SHA-256 bytes; missing, extra, duplicate and symlink entries fail.
 It then installs the archive into an isolated consumer using offline npm with
 scripts, audit and funding requests disabled. The consumer checks every public
 export, the independent version, the preserved Core version, WASM asset lookup,
-default/explicit loader locations and parsing. The original smoke test and parse
-example run against the installed archive. CI also runs the Core-owned Query
+default/explicit loader locations and parsing. The original smoke/parse checks
+and the generic field/streaming suites and examples run against the installed
+archive. CI also runs the Core-owned Query
 fixtures through the installed package's original facade runner.
 
 The source checkout is a metadata/build source, not an installable package:

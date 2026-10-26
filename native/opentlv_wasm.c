@@ -1848,3 +1848,6 @@ const char* opentlv_wasm_document_node(opentlv_wasm_document_t* doc, size_t addr
 
 /* Post-migration generic Format/field boundary. */
 #include "format_fields.h"
+
+/* Post-migration Reader/Writer boundary. */
+#include "streaming.h"

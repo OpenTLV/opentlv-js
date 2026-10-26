@@ -159,6 +159,11 @@ supports owned Fixed/Variable/Escaped/Packed field configuration, composition,
 direct encoding/decoding, size measurement and source preservation. Run
 `node examples/fields.mjs <build>/dist` for a composed-format round trip.
 
+The [Reader/Writer API](docs/webassembly.md#reader-writer-and-tree-streams)
+adds owned incremental cursors, resumable visitors, balanced tree events,
+bounded writers and exact tree measurement. Run
+`node examples/streaming.mjs <build>/dist` for an incremental event round trip.
+
 ## Private package and version
 
 [package.json](package.json) defines the independent JS version, initially
