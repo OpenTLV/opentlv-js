@@ -4,13 +4,16 @@
 
 import copy
 import hashlib
+import json
 from pathlib import Path
 import sys
 import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from migration_compatibility import compare_contracts, verify_historical_inputs
+from migration_compatibility import compare_contracts, compare_additions, verify_historical_inputs
+from migration_compatibility import stage_migration_sources
+import source_evolution
 
 
 class ContractTests(unittest.TestCase):
@@ -44,6 +47,16 @@ class ContractTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "recorded bridge"):
                     compare_contracts(changed, changed, self.declarations)
 
+    def test_post_migration_additions_are_explicit_and_do_not_hide_removals(self):
+        current = copy.deepcopy(self.contract)
+        current["runtime"]["_opentlv_wasm_fields"] = "function"
+        compare_additions(self.contract, current, ["_opentlv_wasm_fields"])
+        with self.assertRaisesRegex(ValueError, "Unreviewed"):
+            compare_additions(self.contract, current, [])
+        current["runtime"].pop("_opentlv_wasm_free")
+        with self.assertRaisesRegex(ValueError, "Unreviewed"):
+            compare_additions(self.contract, current, ["_opentlv_wasm_fields"])
+
 
 class HistoricalInputsTests(unittest.TestCase):
     def setUp(self):
@@ -56,6 +69,20 @@ class HistoricalInputsTests(unittest.TestCase):
         self.path.write_bytes(b"baseline")
         self.inventory = {"files": [{"path": self.name,
                                      "sha256": hashlib.sha256(b"baseline").hexdigest()}]}
+
+    def test_staged_project_restores_baseline_and_keeps_required_build_inputs(self):
+        root = Path(__file__).resolve().parents[1]
+        evolution = source_evolution.load(root)
+        target = self.root / "standalone"
+        stage_migration_sources(root, target, evolution)
+        self.assertTrue(json.loads((target / "cmake/core-features.json").read_text()))
+        self.assertEqual((target / "scripts/core_dependency.py").read_bytes(),
+                         (root / "scripts/core_dependency.py").read_bytes())
+        for name, entry in evolution["changed"].items():
+            self.assertEqual(hashlib.sha256((target / name).read_bytes()).hexdigest(),
+                             entry["baseline_sha256"])
+        for name in evolution["added"]:
+            self.assertFalse((target / name).exists())
 
     def test_exact_inputs_pass(self):
         verify_historical_inputs(self.root, self.inventory)

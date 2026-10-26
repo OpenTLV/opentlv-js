@@ -1,0 +1,83 @@
+{
+  "schema": 1,
+  "reason": "Post-migration issue #3. Preserve immutable migration records and verify the current sources plus reversible additions separately.",
+  "baseline_js_commit": "9f95ea12facc7a76751119b2f0ea23df54cc818c",
+  "changed": {
+    "native/opentlv_wasm.c": {
+      "sha256": "1debefa520529729daf91e77128357d629f80e9763f42187e8b947ca13220787",
+      "baseline_sha256": "090e201ef7b6c51c7ffafdc5dca992ae7e5ab1719d780aed86575b9e47ed768c",
+      "reason": "Issue #3: additive generic Format/field APIs; restore the completed migration sources for historical checks.",
+      "restore": [
+        {
+          "current": "    void*              extension;\n    void             (*extension_free)(void*);\n",
+          "baseline": ""
+        },
+        {
+          "current": "    if (owner->extension_free) owner->extension_free(owner->extension);\n",
+          "baseline": ""
+        },
+        {
+          "current": "\n/* Post-migration generic Format/field boundary. */\n#include \"format_fields.h\"\n",
+          "baseline": ""
+        }
+      ]
+    },
+    "src/query.mjs": {
+      "sha256": "f20d609a4d43c6d1c168caa2c65eeee627a4f11765e52e728263692c316ac97c",
+      "baseline_sha256": "4a966ea90a314c1d3e017713d4e842831ba593a21915ab5eafa7ceafb9d6a5de",
+      "reason": "Issue #3: additive generic Format/field APIs; restore the completed migration sources for historical checks.",
+      "sections": [
+        {
+          "start": "  // BEGIN generic-fields #3\n",
+          "end": "  // END generic-fields #3\n"
+        },
+        {
+          "start": "    // BEGIN generic-format-operations #3\n",
+          "end": "    // END generic-format-operations #3\n"
+        }
+      ],
+      "restore": [
+        {
+          "current": "this._pointer = name === composedToken ? createComposed(options) : temporary(string(name)",
+          "baseline": "this._pointer = temporary(string(name)"
+        },
+        {
+          "current": "Format, Field, FormatError, V1Query",
+          "baseline": "Format, V1Query"
+        },
+        {
+          "current": "          customFormats.add(this);\n",
+          "baseline": ""
+        }
+      ]
+    },
+    "cmake/Wasm.cmake": {
+      "sha256": "0f8adf26979e9eebf539582c5571b133fee331d6394a4c0e3245e2179e30c437",
+      "baseline_sha256": "06bea19d9f14bb6d147802f23e6e48877fcc2251c3cdd9574026a4eeb0215d46",
+      "reason": "Issue #3: additive generic Format/field APIs; restore the completed migration sources for historical checks.",
+      "sections": [
+        {
+          "start": "\n# BEGIN generic-fields #3\n",
+          "end": "# END generic-fields #3\n"
+        }
+      ]
+    }
+  },
+  "added": {
+    "native/format_fields.h": {
+      "sha256": "9c978d4f1feb803f14c838128d1d7eee4218d85097707296b60877c8c6f17860",
+      "reason": "Issue #3: generic Format/field implementation and runnable example."
+    },
+    "examples/fields.mjs": {
+      "sha256": "5da12f6dbe6b4083e28c6465451e780f3b1046f5f06690be88e66414dd097957",
+      "reason": "Issue #3: generic Format/field implementation and runnable example."
+    }
+  },
+  "bridge_additions": [
+    "_opentlv_wasm_field_free",
+    "_opentlv_wasm_field_new",
+    "_opentlv_wasm_field_operation",
+    "_opentlv_wasm_composed_new",
+    "_opentlv_wasm_format_operation"
+  ]
+}

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 OpenTLV
-"""Verify baseline source parity and the recorded standalone build adaptations."""
+"""Verify restored migration parity and explicitly recorded post-migration sources."""
 
 import argparse
 import hashlib
@@ -9,6 +9,8 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+
+import source_evolution
 
 ROOT = Path(__file__).resolve().parents[1]
 BASELINE = "a9a6f9470c2b285744738b40196bef9d0341fead"
@@ -42,6 +44,10 @@ def verify(core_source=None):
     if (ROOT / "bindings/wasm").exists():
         raise ValueError("Obsolete bindings/wasm source tree remains")
     expected = set(TRANSFERRED.values())
+    evolution = source_evolution.load(ROOT)
+    if not set(evolution["changed"]) <= expected or set(evolution["added"]) & expected:
+        raise ValueError("Unexpected source evolution file set")
+    expected.update(evolution["added"])
     paths = [ROOT / "cmake/Wasm.cmake", ROOT / "tests/smoke.mjs"]
     for name in ("src", "native", "examples", "tests/query"):
         directory = ROOT / name
@@ -54,6 +60,8 @@ def verify(core_source=None):
     if actual != expected:
         raise ValueError(f"Transfer file set differs: missing={sorted(expected - actual)}, "
                          f"unexpected={sorted(actual - expected)}")
+    for name, entry in evolution["added"].items():
+        source_evolution.checked(ROOT, name, entry)
 
     def git(*args):
         return subprocess.check_output(["git", "-C", str(core_source), *args])
@@ -70,7 +78,7 @@ def verify(core_source=None):
                 or entry["migration_destination"] != (None if helper else name)
                 or entry["mode"] != "100644"):
             raise ValueError(f"Unexpected transfer ownership, destination or mode: {name}")
-        data = (ROOT / TRANSFERRED[name]).read_bytes()
+        data = source_evolution.restore(ROOT, TRANSFERRED[name], evolution)
         # Reverse only the relocated file references in two source comments.
         comment_paths = {
             "bindings/wasm/examples/parse.mjs": (b"cmake/Wasm.cmake", b"bindings/wasm/CMakeLists.txt"),
@@ -113,6 +121,9 @@ def verify(core_source=None):
     print(f"Verified {len(entries)} transferred files (including recorded build adaptations) "
           f"and {len(declarations)} bridge declarations "
           f"at Core {BASELINE}")
+    if evolution["changed"] or evolution["added"]:
+        print(f"Restored {len(evolution['changed'])} migration files after checking current hashes; "
+              f"verified {len(evolution['added'])} post-migration additions")
     if core_source is not None:
         print("Verified against Core baseline Git objects (independent of checkout HEAD)")
 

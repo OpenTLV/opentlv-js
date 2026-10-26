@@ -63,3 +63,14 @@ if(OPENTLV_BUILD_WASM_TESTS)
         message(STATUS "node not found; skipping the WebAssembly smoke test.")
     endif()
 endif()
+
+# BEGIN generic-fields #3
+if(OPENTLV_BUILD_WASM_TESTS AND OPENTLV_NODE_EXECUTABLE)
+    add_test(NAME Integration_wasm_fields
+        COMMAND ${OPENTLV_NODE_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tests/format_fields.mjs" "${_wasm_output_dir}")
+    add_test(NAME Integration_example_wasm_fields
+        COMMAND ${OPENTLV_NODE_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/examples/fields.mjs" "${_wasm_output_dir}")
+    set_tests_properties(Integration_wasm_fields Integration_example_wasm_fields
+        PROPERTIES LABELS "integration;wasm")
+endif()
+# END generic-fields #3

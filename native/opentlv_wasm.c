@@ -538,6 +538,8 @@ struct opentlv_wasm_format {
     tlv_fixed_format_t fixed;
     int                asn1;
     wasm_pin_t*        tags;
+    void*              extension;
+    void             (*extension_free)(void*);
 };
 opentlv_wasm_format_t* opentlv_wasm_format_new(const char* name, size_t tag_size,
                                                size_t length_size, int big, int ltv,
@@ -579,6 +581,7 @@ int opentlv_wasm_format_callbacks(opentlv_wasm_format_t* owner, tlv_decode_fn de
 }
 void opentlv_wasm_format_free(opentlv_wasm_format_t* owner) {
     if (!owner || --owner->references) return;
+    if (owner->extension_free) owner->extension_free(owner->extension);
     while (owner->tags) {
         wasm_pin_t* next = owner->tags->next;
         free(owner->tags);
@@ -1842,3 +1845,6 @@ const char* opentlv_wasm_document_node(opentlv_wasm_document_t* doc, size_t addr
 #endif
     return query_reply(b);
 }
+
+/* Post-migration generic Format/field boundary. */
+#include "format_fields.h"

@@ -4,6 +4,7 @@
 
 from contextlib import redirect_stdout
 import io
+import hashlib
 import json
 from pathlib import Path
 import shutil
@@ -22,7 +23,8 @@ class MigrationTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         for name in (*migration.TRANSFERRED.values(), "migration/source-inventory.json",
-                     "migration/build-adaptations.json"):
+                     "migration/build-adaptations.json", "ci/source-evolution.json",
+                     *migration.source_evolution.load(migration.ROOT)["added"]):
             target = self.root / name
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(migration.ROOT / name, target)
@@ -57,6 +59,31 @@ class MigrationTests(unittest.TestCase):
     def test_extra_transferred_source_fails(self):
         (self.root / "src/extra.mjs").write_text("export const extra = true;\n")
         with self.assertRaisesRegex(ValueError, "unexpected=.*extra.mjs"):
+            self.verify()
+
+    def test_new_sources_require_recorded_hashes(self):
+        path = self.root / "native/format_fields.h"
+        path.write_bytes(path.read_bytes() + b"\n// unexpected\n")
+        with self.assertRaisesRegex(ValueError, "post-migration source differs"):
+            self.verify()
+
+    def test_changed_current_hash_cannot_replace_historical_identity(self):
+        name = "src/query.mjs"
+        path = self.root / name
+        path.write_bytes(path.read_bytes() + b"\n// changed historical bytes\n")
+        manifest = self.root / "ci/source-evolution.json"
+        data = json.loads(manifest.read_text())
+        data["changed"][name]["sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+        manifest.write_text(json.dumps(data))
+        with self.assertRaisesRegex(ValueError, "Restored migration source differs"):
+            self.verify()
+
+    def test_stale_restoration_rule_fails(self):
+        manifest = self.root / "ci/source-evolution.json"
+        data = json.loads(manifest.read_text())
+        data["changed"]["src/query.mjs"]["restore"][0]["current"] = "no such source text"
+        manifest.write_text(json.dumps(data))
+        with self.assertRaisesRegex(ValueError, "Unrecognized evolution replacement"):
             self.verify()
 
     def test_old_source_tree_cannot_coexist(self):

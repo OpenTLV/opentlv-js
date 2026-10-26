@@ -154,6 +154,11 @@ CI also publishes an informational [pinned Core API reference report](docs/ci.md
 with per-header gaps, reviewed exclusions and PR Core-pin changes. It separates
 generic Core from Builtins and does not measure functional JS/TypeScript parity.
 
+The [generic Format and field API](docs/webassembly.md#generic-formats-and-field-encodings)
+supports owned Fixed/Variable/Escaped/Packed field configuration, composition,
+direct encoding/decoding, size measurement and source preservation. Run
+`node examples/fields.mjs <build>/dist` for a composed-format round trip.
+
 ## Private package and version
 
 [package.json](package.json) defines the independent JS version, initially
