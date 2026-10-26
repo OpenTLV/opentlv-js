@@ -288,7 +288,7 @@ export function queryFacade(wasm) {
       const element = pointer => {
         const tag = wasm._opentlv_wasm_element_field(pointer, 0), tagSize = wasm._opentlv_wasm_element_field(pointer, 1);
         const value = wasm._opentlv_wasm_element_field(pointer, 2), valueSize = wasm._opentlv_wasm_element_field(pointer, 3);
-        return Object.freeze({ tag: wasm.HEAPU8.slice(tag, tag + tagSize), value: value ? wasm.HEAPU8.slice(value, value + valueSize) : null, valueSize });
+        return Object.freeze({ tag: tag ? wasm.HEAPU8.slice(tag, tag + tagSize) : null, value: value ? wasm.HEAPU8.slice(value, value + valueSize) : null, valueSize });
       };
       try {
         const classify = options.isConstructed;
@@ -304,8 +304,8 @@ export function queryFacade(wasm) {
             if (decoded?.code) return size(decoded.code);
             const { tag, header, value, trailer = { offset: value.offset + value.size, size: 0 }, tagRange = null, lengthRange = null } = decoded;
             const ranges = [header, tagRange, lengthRange, value, trailer].flatMap(range => range ? [size(range.offset), size(range.size)] : [0xffffffff, 0]);
-            return temporary(bytes(tag), tagPointer => temporary(pointers(ranges), rangePointer =>
-              wasm._opentlv_wasm_format_decoded(owner, result, data, length, tagPointer, tag.length, rangePointer)));
+            return temporary(tag === null ? new Uint8Array() : bytes(tag), tagPointer => temporary(pointers(ranges), rangePointer =>
+              wasm._opentlv_wasm_format_decoded(owner, result, data, length, tag === null ? 0 : tagPointer, tag?.length ?? 0, rangePointer)));
           }, "iiiiii");
           const measurePointer = measure ? callback((context, input, result) => {
             const e = element(input), layout = measure(e);
@@ -1204,7 +1204,7 @@ export function queryFacade(wasm) {
           temporaries([pointers(tables.flat()), pointers(nativeRules.flat()), pointers(nativeGroups.flat())], ([t, r, g]) => {
             const reply = dsReply(wasm._opentlv_wasm_structure_new(t, tables.length, r, rules.length, g, groups.length), true);
             if (reply.code) throw new SchemaError(reply);
-            this.#pointer = reply.schema;
+            this.#pointer = reply.schema; structureSchemaHandles.set(this, this.#pointer);
           });
         });
       } catch (error) { this.#owner.close(); throw error; }
@@ -1244,7 +1244,171 @@ export function queryFacade(wasm) {
     }
   }
   // END document-schema #5
-  return { Schema, SchemaError, DocumentBuilder, Reader, TreeReader, Writer, TreeWriter, StreamError, StreamResult, Visit, QueryProgram, QueryExecution, QuerySchema, QueryError, Document, Node, Format, Field, FormatError, V1Query, nameResolver, definitionResolver,
+  // BEGIN codecs-generator #6
+  class CodecError extends Error {
+    constructor(reply) {
+      super(wasm.UTF8ToString(wasm._opentlv_wasm_strerror(reply.code)));
+      this.name = "CodecError"; this.code = reply.code;
+      this.diagnostic = reply.diagnostic ?? null; this.codec = reply.codec_detail ?? null;
+    }
+  }
+  function codecReply(pointer) {
+    const reply = dsReply(pointer, true);
+    if (reply.code) throw new CodecError(reply);
+    return reply;
+  }
+  function integerBytes(value, width = 8, signed = false) {
+    if (typeof value !== "bigint" && !Number.isSafeInteger(value)) throw new TypeError("safe integer or bigint required");
+    const n = BigInt(value), bits = BigInt(width * 8);
+    if (n < (signed ? -(1n << (bits - 1n)) : 0n) || n >= (1n << (signed ? bits - 1n : bits)))
+      throw new RangeError(`${signed ? "int" : "uint"}${bits} required`);
+    const data = new Uint8Array(width);
+    for (let i = 0; i < width; ++i) data[i] = Number((n >> BigInt(i * 8)) & 255n);
+    return data;
+  }
+  const codecToken = Symbol("codec");
+  class Codec {
+    #config; #kind; #closed = false;
+    constructor(token, config) {
+      if (token !== codecToken) throw new TypeError("use Codec factories");
+      this.#kind = config[0]; this.#config = pointers(config);
+    }
+    static builtin(name) {
+      const kind = ["uint8", "uint16-be", "uint16-le", "uint32-be", "uint32-le", "int64-minimal-be", "bytes", "ipv4", "ipv4-list"].indexOf(name);
+      if (kind < 0) throw new TypeError("unknown generic codec");
+      return new Codec(codecToken, [kind, 0, 0, 0, 0, 0, 0xffffffff, 0, 0]);
+    }
+    static number({ encoding = "big", width = 0, digits = 0 } = {}) {
+      const kind = ["big", "little", "bcd"].indexOf(encoding);
+      if (kind < 0) throw new TypeError("big, little or bcd encoding required");
+      return new Codec(codecToken, [9, kind, size(width), size(digits), 0, 0, 0xffffffff, 0, 0]);
+    }
+    static schemaNumber({ min_length = 0, max_length = 0xffffffff, length_multiple = 0, endpoints = false, ...number } = {}) {
+      const codec = Codec.number(number);
+      codec.#kind = 12;
+      const view = new DataView(codec.#config.buffer);
+      [12, view.getUint32(4, true), view.getUint32(8, true), view.getUint32(12, true), 0,
+        size(min_length), size(max_length), flag(endpoints), size(length_multiple)]
+        .forEach((value, index) => view.setUint32(index * 4, value, true));
+      return codec;
+    }
+    static digits({ width = 0 } = {}) { return new Codec(codecToken, [10, 0, size(width), 0, 0, 0, 0xffffffff, 0, 0]); }
+    static text({ alphabet = "printable", width = 0, zero_padding = false } = {}) {
+      const kind = ["printable", "alnum"].indexOf(alphabet);
+      if (kind < 0) throw new TypeError("printable or alnum alphabet required");
+      return new Codec(codecToken, [11, kind, size(width), 0, flag(zero_padding), 0, 0xffffffff, 0, 0]);
+    }
+    #input(value) {
+      if (this.#kind <= 5 || this.#kind === 9 || this.#kind === 12)
+        return integerBytes(value, this.#kind === 0 ? 1 : this.#kind <= 2 ? 2 : this.#kind <= 4 ? 4 : 8, this.#kind === 5);
+      if (this.#kind === 10 || this.#kind === 11) {
+        if (typeof value !== "string") throw new TypeError("string required");
+        return encoder.encode(value);
+      }
+      return bytes(value);
+    }
+    #run(operation, input, capacity = 0xffffffff, index = 0) {
+      if (this.#closed) throw new QueryError(INVALID_STATE);
+      return temporaries([this.#config, input], ([config, data]) =>
+        codecReply(wasm._opentlv_wasm_codec(config, operation, data, input.length, size(capacity), size(index))));
+    }
+    decode(input) {
+      const reply = this.#run(0, bytes(input));
+      if (this.#kind === 5 || this.#kind === 9 || this.#kind === 12) return BigInt(reply.value);
+      if (this.#kind <= 4 || this.#kind === 10) return reply.value;
+      const value = unhex(reply.value);
+      return this.#kind === 11 ? decoder.decode(value) : value;
+    }
+    encode(value, { capacity = 0xffffffff } = {}) { return unhex(this.#run(1, this.#input(value), capacity).value); }
+    measure(value) { return this.#run(2, this.#input(value)).size; }
+    at(input, index) {
+      if (this.#kind !== 8) throw new TypeError("IPv4 list codec required");
+      return unhex(this.#run(3, bytes(input), 0, index).value);
+    }
+    close() { this.#closed = true; }
+  }
+  const structureSchemaHandles = new WeakMap();
+  class StructureCodec {
+    #owner; #schema; #decode; #encode; #limits; #busy = false; #closed = false;
+    constructor({ format = "ber", schema, max_depth = 64, max_elements = 65536, decode, encode } = {}) {
+      if (decode !== undefined && typeof decode !== "function" || encode !== undefined && typeof encode !== "function")
+        throw new TypeError("synchronous codec callbacks required");
+      this.#decode = decode; this.#encode = encode;
+      this.#limits = [size(max_depth), size(max_elements)];
+      this.#owner = new QueryProgram("//*", { format });
+      try { if (schema !== undefined) this.#schema = new Schema(schema, { format }); }
+      catch (error) { this.#owner.close(); throw error; }
+    }
+    #run(operation, input, capacity = 0xffffffff) {
+      const config = pointers([operation, ...this.#limits, size(capacity)]);
+      return this.#owner._native(() => temporaries([config, input], ([p, data]) =>
+        unhex(codecReply(wasm._opentlv_wasm_structure_codec(this.#owner._pointer,
+          this.#schema ? structureSchemaHandles.get(this.#schema) : 0, p, data, input.length)).value)));
+    }
+    #enter(run) {
+      if (this.#closed || this.#busy || this.#owner._formatOwner._active) throw new QueryError(INVALID_STATE);
+      this.#busy = true;
+      try { return run(); } finally { this.#busy = false; }
+    }
+    decode(input) {
+      return this.#enter(() => {
+        if (!this.#decode) throw new CodecError({ code: UNSUPPORTED });
+        const value = this.#decode(this.#run(0, bytes(input)));
+        if (value && typeof value.then === "function") throw new TypeError("synchronous codec callback required");
+        return value;
+      });
+    }
+    encode(value, { capacity = 0xffffffff } = {}) {
+      return this.#enter(() => {
+        if (!this.#encode) throw new CodecError({ code: UNSUPPORTED });
+        return this.#run(1, bytes(this.#encode(value)).slice(), capacity);
+      });
+    }
+    measure(value) { return this.encode(value).length; }
+    close() {
+      if (this.#busy || this.#owner._formatOwner._active) throw new QueryError(INVALID_STATE);
+      if (this.#closed) return;
+      this.#schema?.close(); this.#owner.close(); this.#closed = true;
+    }
+  }
+  class Generator {
+    #owner; #config; #candidates; #closed = false; #busy = false; #workspaceSize; #version;
+    constructor({ format = "ber", candidates, seed = 0n, max_elements = 64, max_depth = 8,
+                  max_value_size = 256, max_case_size = 4096 } = {}) {
+      if (!Array.isArray(candidates)) throw new TypeError("ordered candidates required");
+      this.#candidates = candidates.map(({ tag, min_value_size = 0, max_value_size: max = max_value_size }) =>
+        ({ tag: tag === null ? null : bytes(tag).slice(), min: size(min_value_size), max: size(max) }));
+      const seedBytes = integerBytes(seed), seedView = new DataView(seedBytes.buffer);
+      this.#config = [seedView.getUint32(0, true), seedView.getUint32(4, true), 0, 0,
+        size(max_elements), size(max_depth), size(max_value_size), size(max_case_size)];
+      this.#owner = new QueryProgram("//*", { format });
+      try { const reply = this.#run(0n, true); this.#workspaceSize = reply.workspaceSize; this.#version = reply.version; }
+      catch (error) { this.#owner.close(); throw error; }
+    }
+    #run(case_index, measure) {
+      if (this.#closed || this.#busy || this.#owner._formatOwner._active) throw new QueryError(INVALID_STATE);
+      const index = new DataView(integerBytes(case_index).buffer);
+      const config = [...this.#config]; config[2] = index.getUint32(0, true); config[3] = index.getUint32(4, true);
+      this.#busy = true;
+      try {
+        return this.#owner._native(() => temporaries(this.#candidates.map(c => c.tag ?? new Uint8Array()), tags => {
+          const entries = this.#candidates.flatMap((c, i) => [c.tag === null ? 0 : tags[i], c.tag?.length ?? 0, c.min, c.max]);
+          return temporaries([pointers(config), pointers(entries)], ([p, e]) =>
+            dsReply(wasm._opentlv_wasm_generate(this.#owner._pointer, p, e, tags.length, Number(measure))));
+        }));
+      } finally { this.#busy = false; }
+    }
+    get workspaceSize() { if (this.#closed) throw new QueryError(INVALID_STATE); return this.#workspaceSize; }
+    get version() { if (this.#closed) throw new QueryError(INVALID_STATE); return this.#version; }
+    generate(case_index = 0n) { return unhex(this.#run(case_index, false).value); }
+    close() {
+      if (this.#busy || this.#owner._formatOwner._active) throw new QueryError(INVALID_STATE);
+      if (this.#closed) return;
+      this.#owner.close(); this.#closed = true;
+    }
+  }
+  // END codecs-generator #6
+  return { Codec, CodecError, StructureCodec, Generator, Schema, SchemaError, DocumentBuilder, Reader, TreeReader, Writer, TreeWriter, StreamError, StreamResult, Visit, QueryProgram, QueryExecution, QuerySchema, QueryError, Document, Node, Format, Field, FormatError, V1Query, nameResolver, definitionResolver,
     compileQuery: (text, options) => new QueryProgram(text, options),
     loadQuery: (image, options) => QueryProgram.load(image, options),
     querySchema: (rules, options) => new QuerySchema(rules, options),

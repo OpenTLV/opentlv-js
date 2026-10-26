@@ -755,3 +755,143 @@ The four existing runtime output names are unchanged. Two declaration files are
 also copied beside the build outputs; the checked package adds root/version
 declarations and explicit `types` exports. Install the checked private archive,
 not the source checkout. All owned objects still require explicit `close()`.
+
+## Generic codecs and wire Generator
+
+Issue #6 adds the Core generic conversion and Generator surfaces. Obtain their
+constructors from `await loadOpenTLV()`. Every factory returns an object with
+idempotent `close()`; operations after closing fail. Codec configuration and
+Generator candidate tags are copied at construction, and returned byte arrays
+are independent copies. Callers never retain pointers into growable WASM memory.
+
+### Value codecs
+
+All codecs provide `decode(bytes)`, `encode(value, { capacity? })` and
+`measure(value)`. `measure` validates through Core and returns the exact encoded
+byte count. Encode allocates that size by default; an explicit smaller capacity
+produces a Core buffer error. A capacity of `0xffffffff` selects automatic sizing.
+
+| Factory | JS representation and policy |
+| --- | --- |
+| `Codec.builtin('uint8')` | Number, 0 through 255 |
+| `Codec.builtin('uint16-be' / 'uint16-le')` | Number, unsigned 16-bit |
+| `Codec.builtin('uint32-be' / 'uint32-le')` | Number, unsigned 32-bit |
+| `Codec.builtin('int64-minimal-be')` | BigInt, minimal signed two's-complement bytes |
+| `Codec.builtin('bytes')` | Copied `Uint8Array`, including empty values |
+| `Codec.builtin('ipv4')` | Four network-order octets as `Uint8Array` |
+| `Codec.builtin('ipv4-list')` | Concatenated network-order octets; `at(bytes, index)` copies one address |
+| `Codec.number({ encoding, width, digits })` | BigInt, unsigned 64-bit binary or packed numeric BCD |
+| `Codec.digits({ width })` | String, preserving leading zeros and using trailing F padding |
+| `Codec.text({ alphabet, width, zero_padding })` | String, explicitly printable ASCII or alphanumeric ASCII |
+| `Codec.schemaNumber(options)` | BigInt, numeric representation composed with field-length constraints |
+
+Integer encoders accept a `bigint` or safe integer `number` and reject out-of-range
+values before transfer. All 64-bit decoders return `bigint`, including small
+values. Number encoding is `big` (default), `little` or `bcd`. Width zero means
+minimal encoding; binary widths are 1–8 bytes and BCD widths 1–9 bytes. BCD requires
+`digits` in 1–18; binary requires zero digits. Core validates representation
+configuration on use. Numeric BCD does not imply decimal scaling.
+
+Digits width zero means minimal packing; a positive width pads with F nibbles.
+Text alphabet is `printable` (default) or `alnum`; width zero is variable length.
+With a positive width, `zero_padding: true` pads/strips trailing zero bytes;
+without padding the text must occupy the entire width. Embedded NUL, non-ASCII
+and disallowed characters fail in Core.
+
+Schema-number options add `min_length` (default 0), `max_length` (default
+`0xffffffff`), `length_multiple` (default 0) and `endpoints` (default false).
+Width zero chooses the shortest schema-permitted representation that fits.
+A fixed width must satisfy the constraints and is never silently widened.
+These are copied field constraints; this adapter performs no tag lookup.
+
+```js
+const { Codec } = await loadOpenTLV();
+const amount = Codec.schemaNumber({
+  encoding: 'bcd', digits: 12, min_length: 6, max_length: 6,
+});
+try {
+  const wire = amount.encode(12345n); // 00 00 00 01 23 45
+  console.log(amount.decode(wire)); // 12345n
+} finally { amount.close(); }
+```
+
+Core conversion failures throw `CodecError` with `code`, copied `diagnostic`
+(including location) and `codec` (operation, reported result, reason, violation,
+representation and delegated Reader/Schema evidence). Invalid JS types/ranges
+throw `TypeError`/`RangeError`; closed or reentrant operations throw `QueryError`.
+No partial output is returned after an error. Borrowed C descriptors, native
+application layouts and raw value-codec function pointers are not exposed.
+
+### Structure object adapters
+
+`new StructureCodec({ format = 'ber', schema?, max_depth = 64,
+max_elements = 65536, decode?, encode? })` maps complete TLV sequences to
+application objects. It retains its Format and snapshots/prepares an optional
+`SchemaTable`. Caller-owned Formats can be closed after construction.
+
+The synchronous `decode(bytes)` callback receives copied bytes only after Core
+validates the entire sequence, nesting, limits and optional Schema. The
+`encode(object)` callback returns a `Uint8Array`, which is copied and validated
+by `tlv_structure_encode` before it is returned. Compose existing Reader/Writer,
+Document and value codecs inside these callbacks to define the object mapping.
+Missing directions fail as unsupported; thrown callback values propagate
+unchanged. Promise results and reentrant use/close are rejected. A callback may
+use other independent objects. Callbacks should not mutate shared Format state.
+
+```js
+const { StructureCodec, Writer } = await loadOpenTLV();
+const codec = new StructureCodec({
+  schema: { rules: [{ tag: Uint8Array.of(4), min_occurs: 1,
+    max_occurs: 1, min_length: 1, max_length: 1 }] },
+  decode: bytes => ({ id: bytes[2] }),
+  encode: object => Writer.encode({
+    tag: Uint8Array.of(4), value: Uint8Array.of(object.id),
+  }),
+});
+try { console.log(codec.decode(codec.encode({ id: 7 }))); }
+finally { codec.close(); }
+```
+
+`measure(object)` encodes and validates once and returns the byte count; unlike
+the raw C size query, it allocates complete output and catches invalid framing
+and Schema violations. Explicit output capacity is supported by `encode`.
+JS callbacks define object mapping; Core retains all wire and validation rules.
+
+### Deterministic wire generation
+
+`new Generator({ format = 'ber', candidates, seed = 0n, max_elements = 64,
+max_depth = 8, max_value_size = 256, max_case_size = 4096 })` owns a snapshot
+of the ordered candidate table and retains the Format. A candidate is
+`{ tag, min_value_size = 0, max_value_size }`; its maximum defaults to the global
+maximum. Tags are `Uint8Array`, or `null` for an absent identifier; an empty
+array is an explicitly present empty tag. Format decides whether an identifier
+is constructed. Only use independently composable candidates; exclude stream
+terminators and context-dependent ordering.
+
+Custom Format decode callbacks may return `tag: null`; their measure/encode
+callbacks receive the same absent-versus-empty distinction. The Format must
+round-trip candidate tag presence as well as its bytes.
+
+`generate(case_index = 0n)` returns one nonempty stream. Seed and index accept
+safe integer numbers or unsigned 64-bit BigInts. The same algorithm version,
+Format configuration, ordered candidates, bounds, seed and index produce the
+same bytes, independent of call history. `version` reports the Core algorithm
+version (2 at this pin), and `workspaceSize` reports the required native scratch
+bytes. Storage is allocated per operation and released even on error. Format
+callbacks must be deterministic. Core validates limits and rejects impossible
+cases; errors preserve their result code and Format callback exceptions.
+
+```js
+const { Generator } = await loadOpenTLV();
+const cases = new Generator({ seed: 42n,
+  candidates: [{ tag: Uint8Array.of(4), max_value_size: 16 }],
+  max_case_size: 128,
+});
+try { console.log(cases.generate(7n)); }
+finally { cases.close(); }
+```
+
+Generation delegates to the canonical Core Writer and verifies byte-exact
+Reader/Writer reconstruction. Primitive contents are arbitrary bytes: this API
+does not generate Schema-valid or Codec-valid application values. Builtins
+parity, browser/worker validation and publication remain separate work.

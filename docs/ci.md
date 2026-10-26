@@ -372,9 +372,9 @@ and group constraints, ordering, length policies and bounded diagnostic reports.
 Unreferenced C aliases use the diagnostic/checked/explicit-format variants already
 bound. Native visitor functions map to owned compiled execution and synchronous
 JS visitation. Raw plan pointer views and V1 borrowed-pointer rebinding are
-intentionally excluded. Query codec/definition adapters, Schema number codecs,
-value constraints, generic codecs and Generator remain visible gaps for the
-separate roadmap work; no Builtins parity claim is made. A whole-stream builder
+intentionally excluded. Query codec/definition adapters and value constraints
+remain visible gaps for separate roadmap work. Generic codecs, Schema number
+codecs and Generator are covered by #6 below; no Builtins parity claim is made. A whole-stream builder
 reference does not imply support for the native borrowed-reader/subtree mode.
 
 CTest and installed-package checks execute `tests/document_schema.mjs` and
@@ -391,3 +391,47 @@ migration baseline. Release-tier
 validation still compares the reconstructed baseline's four runtime outputs and
 the current private archives from two independent builds. Local Node and type
 checks do not establish hosted, browser/worker, publication or release evidence.
+
+## Codec/Generator inventory (#6)
+
+Against unchanged Core `a9a6f9470c2b285744738b40196bef9d0341fead`, the initial
+inventory lacked 21 symbols across `tlv/codec/*.h` (including diagnostic
+initialization), two in `tlv/schema/number.h` and two in `tlv/generator.h`.
+All 25 now have native references and usable JS/TS operations. The generic
+inventory moves from 167 to 192 references, with 47 missing symbols and 58
+previously reviewed exclusions out of 297. Builtins remains 19 references out
+of 291 and is outside this issue. Generate the current report with:
+
+```sh
+python -B scripts/api_coverage.py --core ../opentlv \
+  --output build/issue6-api-coverage.json --summary build/issue6-api-coverage.md
+```
+
+| Core surface | Public binding operation |
+| --- | --- |
+| `codec.h`, `values.h`, `ipv4.h` | `Codec.builtin`, `decode`, `encode`, `measure`, IPv4-list `at` |
+| `number.h`, `digits.h`, `text.h` | `Codec.number`, `digits`, `text` |
+| `schema/number.h` | `Codec.schemaNumber` with owned field-length constraints |
+| `codec/structure.h` | `StructureCodec` with synchronous application-object callbacks |
+| `codec/diagnostic.h` | Initialized and copied `CodecError.diagnostic` / `codec` |
+| `generator.h` | `Generator.workspaceSize`, `version` and random-access `generate` |
+
+The report measures lexical references, not functional parity. Raw C object
+layouts, borrowed descriptors, function pointers and caller-managed native
+scratch buffers are intentionally replaced by copied representations and
+binding-managed storage. Arbitrary native value-codec callbacks are not exposed;
+application object mapping uses `StructureCodec`. Its measure operation encodes
+and validates the complete output, so it allocates and invokes the JS encoder
+once per call. Generator produces reconstructible wire streams, not Schema- or
+Codec-valid values. These representation choices require no additional ignored
+Core symbols in `cmake/api-coverage.json`.
+
+CTest and installed-package checks run `tests/codecs_generator.mjs` and the
+example. Tests cover exact wire encodings, signed/unsigned 64-bit limits,
+minimal encoding, BCD/digit/text rejection, IPv4 indexing, Schema width selection,
+structure validation before decode and after encode, callback exceptions and
+reentry guards, retained Formats, copied input/configuration/output, memory
+growth, deterministic case lookup and Reader/TreeWriter reconstruction.
+The installed TypeScript checks cover the same factories and typed object
+adapters in NodeNext and Bundler modes. Three additive bridge exports are
+recorded separately from the immutable migration baseline.

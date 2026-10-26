@@ -1,13 +1,25 @@
 {
   "schema": 1,
-  "reason": "Post-migration issues #3, #4 and #5; preserve immutable sources with separately verified additions.",
+  "reason": "Post-migration issues #3 through #6; preserve immutable sources with separately verified additions.",
   "baseline_js_commit": "9f95ea12facc7a76751119b2f0ea23df54cc818c",
   "changed": {
     "native/opentlv_wasm.c": {
-      "sha256": "6a4fc4d5fbdb5b619e89edea55b6cbfcb725b73db69f52ee91f49530256813fe",
+      "sha256": "50f8e99575693744d63e38f26725c88f755304a1ef4c7d8b06ac6c572f5b3107",
       "baseline_sha256": "090e201ef7b6c51c7ffafdc5dca992ae7e5ab1719d780aed86575b9e47ed768c",
       "reason": "Issues #3 and #4: additive Format/field and Reader/Writer APIs; restore completed migration sources for historical checks.",
       "restore": [
+        {
+          "current": "fields[3], fields[4], result->element, &owner->format, tag ? TLV_TAG_BINDING_FORMAT : TLV_TAG_BINDING_SOURCE};",
+          "baseline": "fields[3], fields[4], result->element, &owner->format, TLV_TAG_BINDING_FORMAT};"
+        },
+        {
+          "current": "result->element.tag = tlv_tag(tag ? pin->data : NULL, tag_size);",
+          "baseline": "result->element.tag = tlv_tag(pin->data, tag_size);"
+        },
+        {
+          "current": "\n/* Post-migration Codec/Generator boundary. */\n#include \"codecs_generator.h\"\n",
+          "baseline": ""
+        },
         {
           "current": "    if (d) {\n        builder_text(b, \",\\\"cause\\\":\"); builder_json_string(b, tlv_query_cause_string(d->cause));\n        builder_text(b, \",\\\"configured\\\":\");",
           "baseline": "    if (d) {\n        builder_text(b, \",\\\"configured\\\":\");"
@@ -47,7 +59,7 @@
       ]
     },
     "src/query.mjs": {
-      "sha256": "d38230ec6d1e62843ed11fe474366c42ee59d3019072401f4e09d944474285bb",
+      "sha256": "f708a8ff49eff4f8acd4e7edda08f48ad464ba0a8a9d8b36ceb6bc846b4dc1f5",
       "baseline_sha256": "4a966ea90a314c1d3e017713d4e842831ba593a21915ab5eafa7ceafb9d6a5de",
       "reason": "Issues #3 and #4: additive Format/field and Reader/Writer APIs; restore completed migration sources for historical checks.",
       "sections": [
@@ -66,9 +78,25 @@
         {
           "start": "  // BEGIN document-schema #5\n",
           "end": "  // END document-schema #5\n"
+        },
+        {
+          "start": "  // BEGIN codecs-generator #6\n",
+          "end": "  // END codecs-generator #6\n"
         }
       ],
       "restore": [
+        {
+          "current": "            return temporary(tag === null ? new Uint8Array() : bytes(tag), tagPointer => temporary(pointers(ranges), rangePointer =>\n              wasm._opentlv_wasm_format_decoded(owner, result, data, length, tag === null ? 0 : tagPointer, tag?.length ?? 0, rangePointer)));",
+          "baseline": "            return temporary(bytes(tag), tagPointer => temporary(pointers(ranges), rangePointer =>\n              wasm._opentlv_wasm_format_decoded(owner, result, data, length, tagPointer, tag.length, rangePointer)));"
+        },
+        {
+          "current": "tag: tag ? wasm.HEAPU8.slice(tag, tag + tagSize) : null, value:",
+          "baseline": "tag: wasm.HEAPU8.slice(tag, tag + tagSize), value:"
+        },
+        {
+          "current": "return { Codec, CodecError, StructureCodec, Generator, Schema, SchemaError,",
+          "baseline": "return { Schema, SchemaError,"
+        },
         {
           "current": "      this._busy = true;\n      try {\n        if (value_capacity === null) value_capacity = this._program.info.constructed_values_required\n          ? document.queryValueSize(this._maxDepth) : 0;\n      } finally { this._busy = false; }",
           "baseline": "      if (value_capacity === null) value_capacity = this._program.info.constructed_values_required\n        ? document.queryValueSize(this._maxDepth) : 0;"
@@ -152,7 +180,7 @@
       ]
     },
     "cmake/Wasm.cmake": {
-      "sha256": "d9edfd24b320c6d4c32e9e5e1c002dc342ba2bb421c70ebeb50de4fdc30b185b",
+      "sha256": "e275cbf7afc2cb1d37ec49999d093467e200df81c9d9abecaed7ed294109f35a",
       "baseline_sha256": "06bea19d9f14bb6d147802f23e6e48877fcc2251c3cdd9574026a4eeb0215d46",
       "reason": "Issues #3 and #4: additive Format/field and Reader/Writer APIs; restore completed migration sources for historical checks.",
       "sections": [
@@ -167,6 +195,10 @@
         {
           "start": "\n# BEGIN document-schema #5\n",
           "end": "# END document-schema #5\n"
+        },
+        {
+          "start": "\n# BEGIN codecs-generator #6\n",
+          "end": "# END codecs-generator #6\n"
         }
       ]
     }
@@ -198,11 +230,19 @@
     },
     "src/query.d.mts": {
       "reason": "Issue #5: declarations and runnable Document/Schema example.",
-      "sha256": "22e0151865bdaf8000a5ecde439e56d635feeae546082ab56f239c7722fb7626"
+      "sha256": "3e579f8fd34538a16644e72f95fbe63945c30f7db0c0c791dd45b9852aa418b8"
     },
     "examples/document_schema.mjs": {
       "reason": "Issue #5: declarations and runnable Document/Schema example.",
       "sha256": "80ebf3388a8e3aa17dad8f67ae5ed236428ef1d1728779ad0b236a660fb1ee0c"
+    },
+    "native/codecs_generator.h": {
+      "reason": "Issue #6: generic Codec and deterministic wire Generator APIs.",
+      "sha256": "8d1a45364cccf5be90a70d915af1ed7735ea29e2afd04ce78fd330b379fb4335"
+    },
+    "examples/codecs_generator.mjs": {
+      "reason": "Issue #6: generic Codec and deterministic wire Generator APIs.",
+      "sha256": "9785e3d131b86f7c1e39ccc8c0441813aca6ca850e3a4f4188740570b16068b3"
     }
   },
   "bridge_additions": [
@@ -228,6 +268,9 @@
     "_opentlv_wasm_structure_new",
     "_opentlv_wasm_structure_validate",
     "_opentlv_wasm_structure_find",
-    "_opentlv_wasm_execution_document_context"
+    "_opentlv_wasm_execution_document_context",
+    "_opentlv_wasm_codec",
+    "_opentlv_wasm_structure_codec",
+    "_opentlv_wasm_generate"
   ]
 }

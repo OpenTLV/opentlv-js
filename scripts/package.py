@@ -179,6 +179,8 @@ def check(build, output):
         runner.run("installed-streaming-example", "node", ROOT / "examples/streaming.mjs", installed / "dist")
         runner.run("installed-document-schema", "node", ROOT / "tests/document_schema.mjs", installed / "dist")
         runner.run("installed-document-schema-example", "node", ROOT / "examples/document_schema.mjs", installed / "dist")
+        runner.run("installed-codecs-generator", "node", ROOT / "tests/codecs_generator.mjs", installed / "dist")
+        runner.run("installed-codecs-generator-example", "node", ROOT / "examples/codecs_generator.mjs", installed / "dist")
         tsc = shutil.which("tsc")
         if tsc is None:
             raise ValueError("TypeScript 5.9.3 tsc is required for installed-package checks")
