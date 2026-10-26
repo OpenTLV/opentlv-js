@@ -10,6 +10,8 @@ Core. The migrated smoke test (`tests/smoke.mjs`), parse example
 All runtime jobs use Ubuntu 24.04, Emscripten **4.0.10**, Node **22**, Ninja and
 the exact Core revision in `cmake/core-source.json`. Node is selected after the
 Emscripten environment, so the SDK's bundled Node cannot silently replace it.
+Ninja comes from the Ubuntu runner image; `ninja --version` verifies its
+availability without an APT update or dependency on Ubuntu package mirrors.
 
 | Workflow | Trigger | Runtime checks |
 | --- | --- | --- |

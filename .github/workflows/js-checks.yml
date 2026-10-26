@@ -78,8 +78,8 @@ jobs:
         run: |
           npm install --prefix "$RUNNER_TEMP/opentlv-typescript" --ignore-scripts --no-audit --no-fund typescript@5.9.3
           echo "$RUNNER_TEMP/opentlv-typescript/node_modules/.bin" >> "$GITHUB_PATH"
-      - name: Install Ninja
-        run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - name: Verify Ninja
+        run: ninja --version
       - name: Build and check the public JS/WASM boundary
         env:
           TIER: ${{ inputs.tier }}
