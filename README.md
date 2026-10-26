@@ -150,6 +150,10 @@ run. CI consumes and verifies Query fixtures and ABI references from the pinned
 Core checkout. It executes Node only, matching the baseline's coverage.
 Browser/worker runtime, hosted CI and publication require separate evidence.
 
+CI also publishes an informational [pinned Core API reference report](docs/ci.md#pinned-core-api-reference-report)
+with per-header gaps, reviewed exclusions and PR Core-pin changes. It separates
+generic Core from Builtins and does not measure functional JS/TypeScript parity.
+
 ## Private package and version
 
 [package.json](package.json) defines the independent JS version, initially

@@ -19,6 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-python@v6
         with:
@@ -27,6 +28,22 @@ jobs:
         run: |
           python -B scripts/verify_migration.py
           python -B -m unittest discover -s tests -v
+      - name: Report pinned Core API references
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        shell: bash
+        run: |
+          args=()
+          if [ -n "$BASE_SHA" ]; then
+            args+=(--base "$BASE_SHA")
+          fi
+          python -B scripts/api_coverage.py "${args[@]}" \
+            --output build/api-coverage/report.json --summary "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: js-api-coverage-${{ inputs.tier }}-${{ github.run_attempt }}
+          path: build/api-coverage/report.json
+          if-no-files-found: error
       - uses: actions/setup-go@v6
         with:
           go-version: stable

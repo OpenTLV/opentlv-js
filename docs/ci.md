@@ -34,6 +34,82 @@ shapes. They are triggers, not a package version policy. A manual Release run
 rehearses the same checks without creating a tag. No workflow publishes an npm
 package, creates a GitHub release or claims release attestation.
 
+## Pinned Core API reference report
+
+The infrastructure job also runs `scripts/api_coverage.py`, adapted from the
+Python binding's reporter and its Go port. It writes
+`build/api-coverage/report.json`, uploads `js-api-coverage-<tier>-<attempt>` and
+appends a Markdown report to the GitHub Step Summary. PRs compare the current
+lock with `cmake/core-source.json` at the event's exact base SHA. Main, Full and
+Release report the current pin without inventing a previous revision.
+
+The report is **informational**: missing symbols and stale ignore patterns do
+not fail CI or impose a percentage threshold. Invalid inputs, unknown `TLV_API`
+declarations, missing Git objects or failed report generation do fail the
+infrastructure job. The report lists generic Core and Builtins separately,
+per-header referenced/missing/ignored names, exclusion reasons, stale patterns,
+and symbols added or removed by a Core-pin change, with their header and kind.
+This is a symbol-name diff, not a C signature or ABI compatibility checker.
+
+Run from the repository root with Python and Git; Emscripten is not required:
+
+```sh
+# Fetch only the exact locked Core commit into build/api-coverage/core.git.
+python -B scripts/api_coverage.py --output build/api-coverage/report.json
+# Read committed blobs from an existing Core repository, without fetching.
+python -B scripts/api_coverage.py --core ../opentlv --base origin/main \
+  --output build/api-coverage/report.json
+```
+
+`--base` names a **binding** revision containing the previous lock;
+`--base-commit` names a previous **Core** revision. `--commit` is an explicit
+exploratory Core override and is recorded in the report; CI never uses it.
+`--summary <file>` appends Markdown to an existing summary. Without `--core`,
+the tool shallow-fetches required commits; with it, all requested commits must
+already exist. Header inventories always use Git blobs at those commits, even
+if the Core checkout has moved or contains uncommitted edits.
+
+### Initial inventory for #2
+
+Reviewed against JS source `72338d8` and locked Core
+`a9a6f9470c2b285744738b40196bef9d0341fead`. The source patterns in
+`cmake/api-coverage.json` select `native/*.c` and `native/*.h`, including private
+adapters. Comments and C literals do not count. Docs, tests, generated output,
+dependency sources and migration inventories are outside these patterns.
+`src/*.mjs` calls the separate `opentlv_wasm_*` bridge namespace and contributes
+no direct Core symbol references; TypeScript declarations do not yet exist.
+
+| Scope | All symbols | Referenced | Missing | Ignored |
+| --- | ---: | ---: | ---: | ---: |
+| Generic Core | 297 | 83 | 212 | 2 |
+| Builtins | 291 | 19 | 272 | 0 |
+
+The adjusted generic reference ratio is 83/295 (28.1%); Builtins is 19/291
+(6.5%). Only two redundant entry points are excluded: `tlv_reader_next`, whose
+diagnostic form is used inside parsing, and NUL-terminated `tlv_query_parse`,
+whose explicit-length form implements `V1Query`. The configuration records the
+reason for each. Missing Writer, field, codec and other generic operations
+remain visible; exclusions from other bindings are not assumed to apply here.
+
+These numbers count lexical references, including private helper bodies and
+conditional code. They do not prove linked WASM exports, JS reachability,
+TypeScript support, executed paths or functional parity. Conversely, descriptor
+callbacks may be usable without a direct symbol reference. The existing
+migration contract checks cover the separate 57-function bridge baseline;
+functional additions need public binding tests and a reviewed contract.
+
+| Area | Existing public JS surface | Follow-up inventory |
+| --- | --- | --- |
+| Format | Named formats, Fixed options and custom callbacks | Generic field composition and additional format operations |
+| Streaming | Query execution has incremental input | General Reader/Writer and tree APIs are absent |
+| Document/Query/Schema | Parse/navigation, value edits, encode, compiled and V1 queries, QuerySchema | Document construction/insertion and general structural schema operations |
+| Codec/generation | Query uses Core adapters internally | Public generic codecs and wire generation are absent |
+
+This is the instrumentation step of epic #1, not a functional-completion claim.
+The report changes no public API, ownership, lifecycle or error contract. Official
+builds still enable all supported Core components and Builtins; Builtins parity
+remains outside the generic epic.
+
 ## Core integration and ownership
 
 Each build uses default FetchContent selection and verifies `pinned-source`

@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "lock": "cmake/core-source.json",
+  "references": ["native/*.c", "native/*.h"],
+  "ignore": [
+    {
+      "reason": "The bridge uses tlv_reader_next_diag to retain structured parse diagnostics; tlv_reader_next is the same operation without diagnostic output. This does not establish a public streaming Reader API.",
+      "symbols": ["tlv_reader_next"]
+    },
+    {
+      "reason": "V1Query passes UTF-8 bytes and their explicit length through tlv_query_parse_n; the NUL-terminated tlv_query_parse variant adds no separate JS operation.",
+      "symbols": ["tlv_query_parse"]
+    }
+  ]
+}
