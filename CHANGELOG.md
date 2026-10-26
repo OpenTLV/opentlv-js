@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Validate migration compatibility by rebuilding the immutable Core baseline in Full/Release CI, comparing emitted WASM/JS contracts and all four output hashes; record cross-repository evidence and remaining acceptance gates. (#14)
 - Own the migrated WASM manual and versioned example catalog, with attempt-bound Main documentation notifications and standalone Docs portal integration. (#13)
 - Add independent private JS package version metadata, explicit ESM/asset exports, offline archive and installed-consumer checks in every CI tier, package reproducibility and separate distribution follow-up tracking without publishing. (#11)
 - Add JS-owned PR/Main/Full CI and tag-triggered double-build reproducibility with pinned Emscripten/Node, preserved smoke/facade checks, verified Core-owned Query/ABI inputs and per-run evidence. (#10)
