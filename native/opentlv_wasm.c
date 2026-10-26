@@ -1862,3 +1862,6 @@ const char* opentlv_wasm_document_node(opentlv_wasm_document_t* doc, size_t addr
 
 /* Post-migration Codec/Generator boundary. */
 #include "codecs_generator.h"
+
+/* Post-migration generic completion boundary. */
+#include "generic.h"

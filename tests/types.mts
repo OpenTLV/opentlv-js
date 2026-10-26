@@ -59,3 +59,17 @@ new api.Generator({ seed: 1n });
 // @ts-expect-error object shape is checked
 objectCodec.encode({ id: '7' });
 integerCodec.close(); byteCodec.close(); objectCodec.close(); generator.close();
+const constraint = api.ValueConstraint.allowed([{ value: 7n, name: 'seven' }]);
+constraint.validate(7);
+const label: string | null = constraint.name(7n);
+const ordering: -1 | 0 | 1 = api.Tag.compare(hexToBytes('01'), hexToBytes('02'));
+const equal: boolean = api.Tag.equal(new Uint8Array(), new Uint8Array());
+const hash: number = api.Tag.hash(hexToBytes('9F02'));
+void label; void ordering; void equal; void hash;
+// @ts-expect-error constraints validate integers
+constraint.validate('7');
+// @ts-expect-error tags are byte arrays
+api.Tag.hash('9F02');
+// @ts-expect-error named values need a scalar value
+api.ValueConstraint.allowed([{ name: 'seven' }]);
+constraint.close();

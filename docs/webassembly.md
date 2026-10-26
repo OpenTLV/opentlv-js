@@ -895,3 +895,189 @@ Generation delegates to the canonical Core Writer and verifies byte-exact
 Reader/Writer reconstruction. Primitive contents are arbitrary bytes: this API
 does not generate Schema-valid or Codec-valid application values. Builtins
 parity, browser/worker validation and publication remain separate work.
+
+## Scalar constraints and tag operations
+
+`ValueConstraint.none()`, `ValueConstraint.range(min, max)` and
+`ValueConstraint.allowed([{ value, name? }, ...])` construct checked snapshots
+of a decoded scalar constraint. Bounds and values accept safe integer numbers
+or signed 64-bit BigInts, including both endpoints. Use a Codec to decode wire
+bytes first; a constraint does not infer an encoding or enforce byte lengths.
+
+`validate(value)` returns `undefined` on success and throws `ConstraintError`
+with Core's `code` and message on rejection (`StreamResult.SCHEMA`). Reversed
+bounds fail construction with `StreamResult.INVALID_SCHEMA`. `name(value)`
+returns the first matching allowed value's name, or `null` for an unnamed,
+absent, range or unconstrained value. Empty names are preserved. Names are
+NUL-free strings; duplicate values retain Core's first-match behavior. An empty
+allowed set rejects every value. This API returns scalar result codes; it does
+not manufacture wire locations or structural Schema diagnostics.
+
+Configuration changes after construction have no effect. `close()` is
+idempotent; subsequent operations throw `QueryError` with `INVALID_STATE`.
+JS type errors and out-of-int64 values throw `TypeError` or `RangeError` before
+native transfer. No C pointer survives an operation, and temporary WASM storage
+is released on both success and failure.
+
+```js
+const { Codec, ValueConstraint } = await loadOpenTLV();
+const codec = Codec.builtin('int64-minimal-be');
+const constraint = ValueConstraint.allowed([{ value: 7n, name: 'ready' }]);
+try {
+  const value = codec.decode(Uint8Array.of(7));
+  constraint.validate(value);
+  console.log(constraint.name(value)); // ready
+} finally { constraint.close(); codec.close(); }
+```
+
+`Tag.compare(left, right)` compares `Uint8Array` contents lexicographically as
+unsigned bytes and returns `-1`, `0` or `1`. Prefixes sort before longer tags.
+`Tag.equal(left, right)` tests byte equality, including empty tags.
+`Tag.hash(bytes)` returns Core's unsigned wasm32 hash. Equal byte sequences
+hash equally; the hash may change across versions, platforms and builds and
+must never be persisted or transmitted. These operations do not interpret tag
+bytes or validate their Format. They accept subarrays, leave inputs unchanged
+and return no borrowed memory.
+
+Run `node tests/generic.mjs <build>/dist` for constraint/tag tests and examples
+of composing Codec and ValueConstraint with Query providers and scoped name
+resolution. See the [coverage review](#generic-api-coverage-review) for the native adapter
+representation differences and remaining intentional exclusions.
+
+## Generic API coverage review
+
+Issue #7 reviews the immutable Core commit
+`a9a6f9470c2b285744738b40196bef9d0341fead`. The before/after inventory is
+192/197 referenced, 47/0 unclassified and 58/100 excluded generic `TLV_API`
+symbols (297 total). Five new references back public ValueConstraint and Tag
+operations. The other 42 were reviewed individually and classified as
+representation or convenience exclusions. Builtins coverage is unchanged and
+outside this review; the official pinned build still enables all components.
+
+The table below covers every generic header with `TLV_API` declarations at this
+pin. R means referenced in production native sources, E means explicitly
+excluded, and G means unclassified gap. These lexical counts do not establish
+functional parity, reachable operations or exhaustive behavior coverage.
+Macros, inline helpers, generated configuration/version declarations and C++
+interfaces are outside this source-header inventory. The runtime Core version
+is available through `api.version`; native configuration queries do not change
+the official all-components build contract.
+
+Functional groups name the usable JS surfaces and binding-owned test files,
+not a claim that every referenced C branch or excluded C function is tested:
+
+| Group | Public behavior | Binding tests under `tests/` |
+| --- | --- | --- |
+| fields | Field and Format factories, decode/measure/encode/preserve | `format_fields.mjs` |
+| stream | Reader, TreeReader, Writer, TreeWriter; copied diagnostics | `streaming.mjs` |
+| document | Document, Node, DocumentBuilder, Schema, QuerySchema | `document_schema.mjs` |
+| query | QueryProgram, QueryExecution, V1Query; images, callbacks and diagnostics | `query/wasm_facade.mjs` |
+| codec | Codec, StructureCodec, Generator; copied codec diagnostics | `codecs_generator.mjs` |
+| generic | ValueConstraint, Tag and Codec/Query composition | `generic.mjs` |
+
+| Pinned header | R | E | G | Functional group |
+| --- | ---: | ---: | ---: | --- |
+| `tlv/codec/codec.h` | 2 | 0 | 0 | codec |
+| `tlv/codec/diagnostic.h` | 5 | 0 | 0 | codec |
+| `tlv/codec/digits.h` | 2 | 0 | 0 | codec |
+| `tlv/codec/ipv4.h` | 3 | 0 | 0 | codec |
+| `tlv/codec/number.h` | 2 | 0 | 0 | codec |
+| `tlv/codec/structure.h` | 2 | 0 | 0 | codec |
+| `tlv/codec/text.h` | 2 | 0 | 0 | codec |
+| `tlv/codec/values.h` | 7 | 0 | 0 | codec |
+| `tlv/copy.h` | 0 | 3 | 0 | stream |
+| `tlv/definition.h` | 1 | 0 | 0 | document |
+| `tlv/diagnostic.h` | 5 | 9 | 0 | stream |
+| `tlv/document/document.h` | 37 | 4 | 0 | document |
+| `tlv/endian.h` | 0 | 15 | 0 | codec |
+| `tlv/field/escaped.h` | 2 | 0 | 0 | fields |
+| `tlv/field/fixed.h` | 4 | 0 | 0 | fields |
+| `tlv/field/packed.h` | 2 | 0 | 0 | fields |
+| `tlv/field/variable.h` | 4 | 0 | 0 | fields |
+| `tlv/format.h` | 8 | 0 | 0 | fields |
+| `tlv/formats/compose.h` | 2 | 13 | 0 | fields |
+| `tlv/formats/escaped.h` | 1 | 3 | 0 | fields |
+| `tlv/formats/fixed.h` | 1 | 0 | 0 | fields |
+| `tlv/formats/packed.h` | 4 | 0 | 0 | fields |
+| `tlv/formats/variable.h` | 2 | 4 | 0 | fields |
+| `tlv/generator.h` | 2 | 0 | 0 | codec |
+| `tlv/query/adapters.h` | 1 | 2 | 0 | generic |
+| `tlv/query/plan.h` | 0 | 2 | 0 | query |
+| `tlv/query/program.h` | 28 | 3 | 0 | query |
+| `tlv/query/query.h` | 6 | 4 | 0 | query |
+| `tlv/reader/diagnostic.h` | 1 | 0 | 0 | stream |
+| `tlv/reader/reader.h` | 10 | 3 | 0 | stream |
+| `tlv/reader/tree.h` | 9 | 2 | 0 | stream |
+| `tlv/reader/visitor.h` | 2 | 1 | 0 | stream |
+| `tlv/result.h` | 1 | 0 | 0 | stream |
+| `tlv/schema/constraint.h` | 3 | 0 | 0 | generic |
+| `tlv/schema/detail.h` | 2 | 0 | 0 | document |
+| `tlv/schema/number.h` | 2 | 0 | 0 | codec |
+| `tlv/schema/query.h` | 3 | 0 | 0 | document |
+| `tlv/schema/schema.h` | 7 | 3 | 0 | document |
+| `tlv/size.h` | 1 | 3 | 0 | codec |
+| `tlv/tag.h` | 2 | 3 | 0 | generic |
+| `tlv/value.h` | 0 | 7 | 0 | codec |
+| `tlv/writer/tree.h` | 10 | 4 | 0 | stream |
+| `tlv/writer/writer.h` | 9 | 12 | 0 | stream |
+
+### Reviewed exclusions and representation boundaries
+
+The exact symbol lists and reasons live in
+[`cmake/api-coverage.json`](../cmake/api-coverage.json). The generated report
+expands them per symbol and header. No broad new header wildcard or artificial
+symbol reference is used to hide later Core additions. Regenerate it with:
+
+```sh
+python -B scripts/api_coverage.py --core ../opentlv \
+  --output build/api-coverage/report.json
+```
+
+- Copy, tag and value storage use `Uint8Array`. `slice()` copies owned bytes;
+  `subarray()` intentionally shares JS storage. `length` supplies the size,
+  and `Tag.compare/equal` compare raw bytes for either tags or values. Core
+  native pointer validity, borrowed spans, overlap/capacity copy interfaces and
+  raw C ownership are not public JS interfaces. Writer handles canonical
+  serialization and validated source preservation separately.
+- Endian load/store helpers are represented by `Codec.number` with explicit
+  `big`/`little` encoding and widths 1 through 8, plus fixed integer codecs.
+  Exact `bigint` values avoid JS precision loss. Unchecked C loads/stores and
+  native host byte order have no separate wire-facing operation. JS sizes are
+  validated as wasm32 integers; logical wire sizes and uint64 values use exact
+  Core operations and bigint where needed.
+- Diagnostic producer APIs mutate linked C context/path storage or enrich
+  locations. JS receives copied result codes, locations, paths, Reader details,
+  Query causes, Schema reports and Codec diagnostics instead. Native diagnostic
+  editing/formatting is intentionally excluded; applications can attach their
+  own presentation records without exposing WASM pointers.
+- `definitionResolver` snapshots explicit namespaces and labels; ambiguity
+  and unknown-name handling are tested. Query providers compose `Codec.decode`
+  with application policy, optional ValueConstraint validation, stable
+  capability IDs and bounded text output. Keep callback-owned codecs open
+  until their programs/executions are finished. A closed codec fails safely;
+  unsigned results beyond signed int64 are rejected. UTF-8 text decoding is
+  strict. Native registry/codec/scratch adapters are not exposed verbatim:
+  callback exceptions (including the original `CodecError`) propagate rather
+  than synthesizing native adapter statuses and diagnostic nesting.
+- Previous reviewed aliases retain their published contracts: diagnostic
+  Reader/Writer/Schema variants; element-based writing; explicit-format Node
+  encoding; length-bounded V1 parsing; owned Query compilation, reset and
+  visitation; descriptor callbacks invoked through Format; and validated owned
+  Query images instead of borrowed relocatable plan pointers.
+
+### Functional validation boundary
+
+CTest runs the binding suites; `scripts/package.py` repeats the generic suite
+against the offline installed archive and checks positive/negative TypeScript
+consumers in NodeNext and Bundler modes. `tests/generic.mjs` covers signed-int64
+endpoints, invalid definitions and values, names and duplicates, configuration
+snapshots, empty sets, close behavior, memory growth, byte ordering/hashing and
+Codec/constraint/Query composition with failure propagation. The other suites
+exercise framing, streams, documents, schemas, images, ownership and callbacks.
+Core-owned Query fixtures and ABI checks remain separate inputs to CI.
+
+Coverage reports stay informational: future pin changes must be reviewed, and
+zero unclassified symbols does not remove the representation boundaries above.
+Local Node and type checks do not prove browser/worker execution, hosted CI,
+publication or release attestation. Builtins parity and performance work remain
+separate follow-ups.
