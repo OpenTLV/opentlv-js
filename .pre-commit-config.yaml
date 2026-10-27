@@ -1,0 +1,31 @@
+# Do not rewrite immutable migration inputs or upstream/generated files.
+# REUSE still checks their attribution using exact-path annotations.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        types: [text]
+        exclude: &preserved '^(src/|native/|examples/|tests/(smoke\.mjs|query/)|cmake/Wasm\.cmake$|migration/|notices/|LICENSES/)|(^|/)(vendor|third_party|generated)/|\.(wasm|bin|dat)$'
+      - id: end-of-file-fixer
+        types: [text]
+        exclude: *preserved
+      - id: check-yaml
+      - id: check-json
+      - id: check-ast
+      - id: check-added-large-files
+        args: [--enforce-all]
+
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.45.0
+    hooks:
+      - id: markdownlint
+        types: [markdown, text]
+        args: [--config, .markdownlint.json]
+        exclude: '^docs/webassembly\.md$|(^|/)(vendor|third_party|generated)/'
+
+  - repo: https://codeberg.org/fsfe/reuse-tool
+    rev: v6.2.0
+    hooks:
+      - id: reuse
+        additional_dependencies: ['reuse[charset-normalizer]==6.2.0']

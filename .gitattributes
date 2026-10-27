@@ -5,3 +5,5 @@
 /tests/smoke.mjs text eol=lf
 /cmake/Wasm.cmake text eol=lf
 /tests/query/wasm_facade.mjs text eol=lf
+# Preserve upstream notice bytes on every platform.
+/notices/** -text

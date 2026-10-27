@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2026 OpenTLV
+# Copyright (c) 2026 Marek Cingel
 """Ensure relocated sources still fail closed against the immutable baseline."""
 
 from contextlib import redirect_stdout

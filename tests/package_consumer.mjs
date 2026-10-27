@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2026 OpenTLV
+// Copyright (c) 2026 Marek Cingel
 // Copied outside the source tree and run against the installed local archive.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";

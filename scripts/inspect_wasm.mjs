@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2026 OpenTLV
+// Copyright (c) 2026 Marek Cingel
 // Inspect the emitted binary, module namespaces and initialized Emscripten API.
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';

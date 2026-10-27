@@ -25,8 +25,13 @@ historical Core WASM target and require migration compatibility as described
 below. Debug retains its own runtime/package checks without comparison to a
 Release binary.
 
-Each workflow also runs the migration verifier, Python infrastructure
-regressions and actionlint 1.7.7. The reusable `js-checks.yml` provides a final
+Each workflow also runs pinned pre-commit checks (including REUSE 6.2.0), the
+migration verifier, Python infrastructure regressions and actionlint 1.7.7.
+Install contributor tools from `requirements-dev.txt` using Python 3.10+;
+the existing build helpers still support Python 3.9+. See the
+[contributor instructions](../README.md#contributing-and-security) for local use
+and [attribution scope](../THIRD_PARTY.md) for generated/runtime files.
+The reusable `js-checks.yml` provides a final
 `JS quality gate` that requires every infrastructure and runtime job to succeed;
 failed, cancelled or skipped prerequisites cannot pass it. Branch protection is
 configured separately in GitHub and must require the PR gate.

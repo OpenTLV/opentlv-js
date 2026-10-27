@@ -364,3 +364,14 @@ Completion sequence:
    by migration checks.
 
 Keep #14 and epic #696 open until the outstanding coordinated gates are recorded.
+
+## Attribution normalization (#30)
+
+The original source inventory, build adaptations, documentation snapshot and
+Core pin remain unchanged. Four imported files without inline license notices
+are covered by exact paths in `REUSE.toml`. Existing Marek Cingel notices remain
+intact; incorrect organization-holder notices in later binding additions are
+corrected, with their current hashes recorded in `ci/source-evolution.json`.
+No historical hash or restoration rule is replaced by a new attribution claim.
+Private package notices and contributor checks are described in
+[dependency attribution](THIRD_PARTY.md).

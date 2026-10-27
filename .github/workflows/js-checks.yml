@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2026 OpenTLV
+# Copyright (c) 2026 Marek Cingel
 name: JS checks
 on:
   workflow_call:
@@ -24,6 +24,10 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
+      - name: Contributor and license checks
+        run: |
+          python -m pip install -r requirements-dev.txt
+          pre-commit run --all-files --show-diff-on-failure
       - name: Migration and CI regressions
         run: |
           python -B scripts/verify_migration.py

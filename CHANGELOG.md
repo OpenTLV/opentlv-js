@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Correct original-author copyright attribution, add exact-path REUSE coverage and pinned contributor checks, preserve upstream runtime notices in private npm archives, and link shared community/security policies. (#30)
 - Use Ninja provided by the Ubuntu CI runner and verify its availability without refreshing APT package indexes. (#7)
 - Own the private Query/Schema adapters and remaining WASM guide content; build against Core without its removed `bindings/` tree while retaining immutable migration provenance. (OpenTLV/opentlv#698)
 - Normalize the standalone layout into `src/`, `native/`, `tests/`, `examples/` and `cmake/`, with build outputs in `<build>/dist/`; preserve public imports and immutable migration provenance. (#12)

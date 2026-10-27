@@ -1,0 +1,68 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Marek Cingel
+
+version = 1
+
+# Reviewed documentation and metadata only. Do not cover future sources,
+# contributors, vendored code or generated artifacts with blanket patterns.
+[[annotations]]
+path = [
+    ".gitattributes",
+    ".gitignore",
+    ".markdownlint.json",
+    ".pre-commit-config.yaml",
+    "CHANGELOG.md",
+    "MIGRATION.md",
+    "README.md",
+    "THIRD_PARTY.md",
+    "ci/source-evolution.json",
+    "cmake/api-coverage.json",
+    "cmake/core-features.json",
+    "cmake/core-source.json",
+    "docs-examples.json",
+    "docs/ci.md",
+    "docs/distribution-follow-ups.md",
+    "docs/packaging.md",
+    "docs/webassembly.md",
+    "migration/build-adaptations.json",
+    "migration/documentation-source.json",
+    "migration/source-inventory.json",
+    "package.json",
+    "packaging/README.md",
+    "requirements-dev.txt",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Marek Cingel"
+SPDX-License-Identifier = "MIT"
+
+# Preserve migration bytes and hashes; these imported files lack inline notices.
+[[annotations]]
+path = ["cmake/Wasm.cmake", "examples/parse.mjs", "src/opentlv.mjs", "tests/smoke.mjs"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Marek Cingel"
+SPDX-License-Identifier = "MIT"
+
+# Upstream notices keep their own authors and license choices.
+[[annotations]]
+path = "notices/core-LICENSE.txt"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Marek Cingel"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "notices/emscripten-LICENSE.txt"
+precedence = "aggregate"
+SPDX-FileCopyrightText = ["2010-2014 Emscripten authors", "Joyent, Inc. and other Node contributors"]
+SPDX-License-Identifier = "(MIT OR NCSA) AND MIT"
+
+[[annotations]]
+path = "notices/musl-COPYRIGHT.txt"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2005-2020 Rich Felker, et al."
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "notices/compiler-rt-LICENSE.txt"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2009-2019 LLVM contributors"
+SPDX-License-Identifier = "(Apache-2.0 WITH LLVM-exception) AND (MIT OR NCSA)"

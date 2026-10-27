@@ -61,7 +61,7 @@ It explicitly sets `release_verified: false`; it is build information, not
 release attestation.
 
 The package has no runtime npm dependencies or lifecycle hooks and remains
-`private: true`. Registry publishing, security/advisory procedures and
+`private: true`. Registry publishing, component support commitments and
 distribution improvements are deferred in the repository's
 [follow-up register](https://github.com/OpenTLV/opentlv-js/blob/main/docs/distribution-follow-ups.md).
 See the repository's
@@ -70,4 +70,12 @@ for the local preparation and validation commands.
 
 ## License
 
-[MIT](LICENSE). Core and transferred source copyright notices are retained.
+[MIT](LICENSE) for original binding code, copyright Marek Cingel.
+The archive includes `LICENSES/MIT.txt` and [dependency attribution](THIRD_PARTY.md)
+with unchanged Core, Emscripten, musl and compiler-rt notices in `notices/`.
+Keep these files with redistributed JS/WASM assets; the package's MIT field
+does not replace third-party runtime terms.
+
+Use the shared [contribution guidelines](https://github.com/OpenTLV/.github/blob/main/CONTRIBUTING.md),
+[Code of Conduct](https://github.com/OpenTLV/.github/blob/main/CODE_OF_CONDUCT.md)
+and [private security reporting policy](https://github.com/OpenTLV/.github/blob/main/SECURITY.md).

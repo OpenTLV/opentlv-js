@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2026 OpenTLV
+# Copyright (c) 2026 Marek Cingel
 include(FetchContent)
 set(_lock "${CMAKE_CURRENT_LIST_DIR}/core-source.json")
 set(_features "${CMAKE_CURRENT_LIST_DIR}/core-features.json")
