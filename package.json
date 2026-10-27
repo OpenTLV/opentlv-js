@@ -43,7 +43,13 @@
     "index.d.mts",
     "version.d.mts",
     "dist/opentlv.d.mts",
-    "dist/query.d.mts"
+    "dist/query.d.mts",
+    "LICENSES/MIT.txt",
+    "THIRD_PARTY.md",
+    "notices/core-LICENSE.txt",
+    "notices/emscripten-LICENSE.txt",
+    "notices/musl-COPYRIGHT.txt",
+    "notices/compiler-rt-LICENSE.txt"
   ],
   "engines": {
     "node": "22.x"

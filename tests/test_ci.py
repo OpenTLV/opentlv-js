@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2026 OpenTLV
+# Copyright (c) 2026 Marek Cingel
 """Regression tests for provenance and fail-closed CI checks, not Core behavior."""
 
 import json

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2026 OpenTLV
+# Copyright (c) 2026 Marek Cingel
 name: JS Release reproducibility
 on:
   push:

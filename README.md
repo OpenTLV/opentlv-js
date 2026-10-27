@@ -214,7 +214,38 @@ The original API and four outputs (`opentlv-core.js`, `opentlv-core.wasm`,
 `opentlv.mjs`, `query.mjs`) are preserved by the migration. Registry naming,
 TypeScript support, toolchain upgrades and API redesign are not part of it.
 
+## Contributing and security
+
+Use the organization's [contribution guidelines](https://github.com/OpenTLV/.github/blob/main/CONTRIBUTING.md),
+[Code of Conduct](https://github.com/OpenTLV/.github/blob/main/CODE_OF_CONDUCT.md)
+and [security policy](https://github.com/OpenTLV/.github/blob/main/SECURITY.md).
+Report suspected vulnerabilities privately through the affected repository's
+Security tab; the shared policy documents a fallback when its reporting form is
+unavailable. Inheriting the policy does not enable private reporting or scanning.
+Community policies and templates stay in `OpenTLV/.github`; this repository
+retains JS/WASM build, test, packaging and licensing instructions.
+
+For contributor checks, create a Python **3.10+** virtual environment and run:
+
+```sh
+python -m pip install -r requirements-dev.txt
+pre-commit install
+pre-commit run --all-files --show-diff-on-failure
+reuse lint
+```
+
+CI runs the same pinned checks. Source migration verification and the runtime
+commands above remain required; REUSE alone does not validate build artifacts.
+Formatting hooks exclude immutable migration sources, upstream notices and
+generated/vendor paths; REUSE still requires their own licensing information.
+The preserved API manual is excluded from Markdownlint because it includes a
+hash-checked historical section. Add accurate headers to new source files and
+use exact REUSE paths for formats without comments. Preserve other contributors'
+and third parties' notices and years.
+
 ## License
 
-[MIT](LICENSE). Transferred Core sources retain their original Marek Cingel
-copyright and license notices alongside the repository's OpenTLV attribution.
+[MIT](LICENSE). Marek Cingel retains copyright in his original contributions;
+OpenTLV is the GitHub organization, not a separate legal copyright holder.
+See [dependency and artifact attribution](THIRD_PARTY.md) for preserved Core,
+Emscripten and runtime notices and the scope of [REUSE metadata](REUSE.toml).

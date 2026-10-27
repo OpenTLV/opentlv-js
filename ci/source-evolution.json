@@ -221,48 +221,48 @@
   },
   "added": {
     "native/format_fields.h": {
-      "sha256": "9c978d4f1feb803f14c838128d1d7eee4218d85097707296b60877c8c6f17860",
-      "reason": "Issue #3: generic Format/field implementation and runnable example."
+      "sha256": "60293d3a74ac799bd3fb21e0a24c428b885a1039c0143843dddb4e0ab1905382",
+      "reason": "Issue #3: generic Format/field implementation and runnable example. Issue #30: correct original-author copyright notice."
     },
     "examples/fields.mjs": {
-      "sha256": "5da12f6dbe6b4083e28c6465451e780f3b1046f5f06690be88e66414dd097957",
-      "reason": "Issue #3: generic Format/field implementation and runnable example."
+      "sha256": "7937e603672cf4b0567197e263746d6265b64026fea7e141cf9dc0bcacc66491",
+      "reason": "Issue #3: generic Format/field implementation and runnable example. Issue #30: correct original-author copyright notice."
     },
     "native/streaming.h": {
-      "reason": "Issue #4: owned Reader/Writer bridge and runnable incremental tree example.",
-      "sha256": "11d692a271c31088c568eb49a0c1abf33deaa9f07761ae07a3f26d9533c99370"
+      "reason": "Issue #4: owned Reader/Writer bridge and runnable incremental tree example. Issue #30: correct original-author copyright notice.",
+      "sha256": "4f2e8c5a0b5f10ba4c5dee220f4003590a345c46f894806d9af23e78864f1775"
     },
     "examples/streaming.mjs": {
-      "reason": "Issue #4: owned Reader/Writer bridge and runnable incremental tree example.",
-      "sha256": "96c70a1a93bcda868399df9412b0b916b7fbb1b14fef8aeb1c7bfc153a975189"
+      "reason": "Issue #4: owned Reader/Writer bridge and runnable incremental tree example. Issue #30: correct original-author copyright notice.",
+      "sha256": "a2fc7368c9104ead64b002877f23e4ce422785ec456630805626de81cc58793b"
     },
     "native/document_schema.h": {
-      "reason": "Issue #5: owned Document and structural Schema boundary.",
-      "sha256": "7a7e6d05510beecdafe1514b7b8183eccd9ca2a827eadf20fd2f4049e559ebe9"
+      "reason": "Issue #5: owned Document and structural Schema boundary. Issue #30: correct original-author copyright notice.",
+      "sha256": "9902e6cab90868985f2b08fca053595600c7833218a63cc291231898cdbb06f5"
     },
     "src/opentlv.d.mts": {
-      "reason": "Issue #5: declarations and runnable Document/Schema example.",
-      "sha256": "6fcf4ed89cbc13014491646c701b4a4cb5c012c349a912b4f09f72fbea884e03"
+      "reason": "Issue #5: declarations and runnable Document/Schema example. Issue #30: correct original-author copyright notice.",
+      "sha256": "4df28376dfbab69a0eab178467ce2ba3304716e1fab4ab218c9085b991db69f2"
     },
     "src/query.d.mts": {
-      "reason": "Issue #5: declarations and runnable Document/Schema example.",
-      "sha256": "3cdfbfb624fe10725e216ec6e41dd947dc183b044640010e177bcdf637864224"
+      "reason": "Issue #5: declarations and runnable Document/Schema example. Issue #30: correct original-author copyright notice.",
+      "sha256": "dbc3ec6c14a6d97a41205c61fd94a0ef9d6bef069a43b286d436eaf47d62ab1e"
     },
     "examples/document_schema.mjs": {
-      "reason": "Issue #5: declarations and runnable Document/Schema example.",
-      "sha256": "80ebf3388a8e3aa17dad8f67ae5ed236428ef1d1728779ad0b236a660fb1ee0c"
+      "reason": "Issue #5: declarations and runnable Document/Schema example. Issue #30: correct original-author copyright notice.",
+      "sha256": "84529b12e356c14727c73571179b1bac659e869084eff6090decd50eec9a19f2"
     },
     "native/codecs_generator.h": {
-      "reason": "Issue #6: generic Codec and deterministic wire Generator APIs.",
-      "sha256": "8d1a45364cccf5be90a70d915af1ed7735ea29e2afd04ce78fd330b379fb4335"
+      "reason": "Issue #6: generic Codec and deterministic wire Generator APIs. Issue #30: correct original-author copyright notice.",
+      "sha256": "5735da2de27d668efe01fcca49e9fc5613df11c1b464d256aa09accdb40f06c9"
     },
     "examples/codecs_generator.mjs": {
-      "reason": "Issue #6: generic Codec and deterministic wire Generator APIs.",
-      "sha256": "9785e3d131b86f7c1e39ccc8c0441813aca6ca850e3a4f4188740570b16068b3"
+      "reason": "Issue #6: generic Codec and deterministic wire Generator APIs. Issue #30: correct original-author copyright notice.",
+      "sha256": "2b47bbafde3dc28e50db0f0c38c801a9f825d627f743f4585e39569ea82114a2"
     },
     "native/generic.h": {
-      "reason": "Issue #7: Core-backed scalar constraints and tag operations.",
-      "sha256": "80aaf923bb1cdc8ef843c574252b9fe1c6298b7d7673d9eb1571884db902dd8a"
+      "reason": "Issue #7: Core-backed scalar constraints and tag operations. Issue #30: correct original-author copyright notice.",
+      "sha256": "f367a997f20284087bb30961b489760e300c5aa0b3eb29699d007b0576df3dfe"
     }
   },
   "bridge_additions": [

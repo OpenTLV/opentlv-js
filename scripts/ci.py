@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2026 OpenTLV
+# Copyright (c) 2026 Marek Cingel
 """Run the JS-owned WASM checks against an independent, pinned Core checkout."""
 
 import argparse

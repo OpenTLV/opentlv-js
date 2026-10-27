@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2026 OpenTLV
+// Copyright (c) 2026 Marek Cingel
 // Binding contracts: marshalling, owned configuration, errors and lifetimes.
 import assert from "node:assert/strict";
 import { pathToFileURL } from "node:url";

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2026 OpenTLV
+// Copyright (c) 2026 Marek Cingel
 /* Representation transfer only: all conversions and wire generation are Core-owned. */
 #include <tlv/codec/values.h>
 #include <tlv/codec/ipv4.h>

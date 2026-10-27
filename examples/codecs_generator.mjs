@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2026 OpenTLV
+// Copyright (c) 2026 Marek Cingel
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 const { loadOpenTLV, hexToBytes } = await import(pathToFileURL(resolve(process.argv[2], 'opentlv.mjs')));

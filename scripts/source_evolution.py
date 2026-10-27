@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2026 OpenTLV
+# Copyright (c) 2026 Marek Cingel
 """Account for reviewed post-migration additions without rewriting the baseline."""
 
 import hashlib

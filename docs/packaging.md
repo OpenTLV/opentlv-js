@@ -68,11 +68,20 @@ to identify Core, preserving their migration contract.
 `package-info.json` includes binding identity and separate immutable Core source
 identity/output hashes. It excludes machine-specific build paths so identical
 builds can produce identical packages. Node 22 is the validated runtime; ESM is
-the only package module interface. The exact 15-file archive includes four
+the only package module interface. The exact 21-file archive includes four
 `.d.mts` declarations, with `types` exports for the root, facade, Query and version
 entry points. TypeScript 5.9.3 checks both NodeNext and Bundler resolution; this
 does not establish browser/worker or bundler runtime compatibility. CommonJS
 and CDN support are not claimed.
+
+The package keeps `license: "MIT"` for original binding code and includes the
+root `LICENSE`, `LICENSES/MIT.txt`, `THIRD_PARTY.md` and four upstream `notices/`
+files for Core, Emscripten, musl and compiler-rt. The generated `version.mjs`
+has the binding's SPDX/author header. Runtime JS/WASM retains its upstream
+ownership; the package MIT field does not replace those terms. Missing, empty
+or symlinked notices fail staging, and archive/installed-consumer checks verify
+their exact bytes. Keep notices with copied runtime assets. See
+[dependency attribution](../THIRD_PARTY.md) before changing Core or toolchains.
 
 All [CI tiers](ci.md) run package checks. The Release reproducibility tier also
 compares the complete private archive hash, metadata and file hashes across two

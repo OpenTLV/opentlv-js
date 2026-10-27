@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2026 OpenTLV
+# Copyright (c) 2026 Marek Cingel
 """Stage and check a private local npm archive; never publish or create a release."""
 
 import argparse
@@ -24,8 +24,11 @@ EXPORTS = {
     "./package.json": "./package.json",
 }
 DECLARATIONS = ("index.d.mts", "version.d.mts", "dist/opentlv.d.mts", "dist/query.d.mts")
+NOTICES = ("LICENSE", "LICENSES/MIT.txt", "THIRD_PARTY.md",
+           "notices/core-LICENSE.txt", "notices/emscripten-LICENSE.txt",
+           "notices/musl-COPYRIGHT.txt", "notices/compiler-rt-LICENSE.txt")
 FILES = {*DECLARATIONS, "package.json", "index.mjs", "version.mjs", "package-info.json",
-         "README.md", "CHANGELOG.md", "LICENSE", *(f"dist/{name}" for name in OUTPUTS)}
+         "README.md", "CHANGELOG.md", *NOTICES, *(f"dist/{name}" for name in OUTPUTS)}
 # SemVer numeric prerelease identifiers must not have leading zeroes.
 NUMBER = r"(?:0|[1-9][0-9]*)"
 IDENTIFIER = rf"(?:{NUMBER}|[0-9]*[A-Za-z-][0-9A-Za-z-]*)"
@@ -81,10 +84,14 @@ def stage(dist, selection, destination, root=ROOT):
     payload = {f"dist/{name}": content for name, content in outputs.items()}
     payload["package.json"] = (json.dumps(data, indent=2) + "\n").encode()
     payload["index.mjs"] = read_file(root / "packaging/index.mjs")
+    # REUSE-IgnoreStart
     payload["version.mjs"] = (
+        "// SPDX-License-Identifier: MIT\n"
+        "// Copyright (c) 2026 Marek Cingel\n"
         "// Generated from package.json; this is the JS binding version, not Core.\n"
         f"export const packageVersion = {json.dumps(data['version'])};\n").encode()
-    for name in ("README.md", "CHANGELOG.md", "LICENSE"):
+    # REUSE-IgnoreEnd
+    for name in ("README.md", "CHANGELOG.md", *NOTICES):
         source = root / "packaging/README.md" if name == "README.md" else root / name
         payload[name] = read_file(source)
     for name in DECLARATIONS:

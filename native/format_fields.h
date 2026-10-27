@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2026 OpenTLV
+// Copyright (c) 2026 Marek Cingel
 /* Included once by opentlv_wasm.c. Owns configuration and marshals values;
  * all field and framing validation/processing remains in the public C Core. */
 #include <inttypes.h>

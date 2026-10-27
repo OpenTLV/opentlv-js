@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2026 OpenTLV
+// Copyright (c) 2026 Marek Cingel
 import type { QueryAPI, FormatName } from './query.mjs';
 export type * from './query.mjs';
 export interface ModuleOptions {

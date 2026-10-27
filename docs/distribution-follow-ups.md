@@ -30,12 +30,13 @@ complete any publication item.
 
 ## SEC-1: Security and advisory process (open)
 
-- Define supported binding/Core versions, private reporting channels, triage
-  ownership and coordinated advisories across the JS bridge and native Core.
+- Issue #30 links the shared [private reporting and coordination policy](https://github.com/OpenTLV/.github/blob/main/SECURITY.md).
+  Repository settings and component support commitments remain separate.
+- Define supported binding/Core versions and component-specific maintenance
+  commitments under that shared reporting and advisory process.
 - Define dependency/security update handling, affected-version assessment,
   advisory publication and patch/release responsibilities.
-- Document the reviewed process without implying that this migration provides
-  an existing response SLA or public reporting contact.
+- Document the remaining component-specific process without promising a response SLA.
 
 ## DIST-1: Distribution improvements (open)
 

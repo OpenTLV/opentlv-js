@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2026 OpenTLV
+// Copyright (c) 2026 Marek Cingel
 /* Call-scoped representation transfer; Core owns constraint and tag semantics. */
 #include <tlv/schema/constraint.h>
 

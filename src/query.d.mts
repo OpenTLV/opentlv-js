@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2026 OpenTLV
+// Copyright (c) 2026 Marek Cingel
 /** Types are exported only at compile time. Runtime constructors belong to the loaded API. */
 export type Integer = number | bigint;
 export type Scalar = boolean | Integer | string | Uint8Array;

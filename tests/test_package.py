@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2026 OpenTLV
+# Copyright (c) 2026 Marek Cingel
 """Private package boundaries and malformed/stale artifact regressions."""
 
 import io
@@ -21,7 +21,7 @@ class PackageTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         self.source = self.root / "source"
-        for name in ("package.json", "packaging/index.mjs", "packaging/README.md", "LICENSE", "CHANGELOG.md",
+        for name in ("package.json", "packaging/index.mjs", "packaging/README.md", *package.NOTICES, "CHANGELOG.md",
                      "src/opentlv.mjs", "src/query.mjs", "src/opentlv.d.mts", "src/query.d.mts",
                      "packaging/index.d.mts", "packaging/version.d.mts"):
             target = self.source / name
@@ -66,6 +66,51 @@ class PackageTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "SemVer"):
                     package.metadata(self.source)
 
+    def test_license_notices_survive_staging_and_archive_checks(self):
+        hashes = self.stage()
+        staged = self.root / "stage"
+        self.assertEqual(json.loads((staged / "package.json").read_text())["license"], "MIT")
+        for name in package.NOTICES:
+            self.assertEqual((staged / name).read_bytes(), (self.source / name).read_bytes())
+        # REUSE-IgnoreStart
+        self.assertIn("SPDX-License-Identifier: MIT", (staged / "version.mjs").read_text())
+        # REUSE-IgnoreEnd
+        archive = self.root / "notices.tgz"
+        with tarfile.open(archive, "w:gz") as bundle:
+            for name in hashes:
+                bundle.add(staged / name, arcname=f"package/{name}")
+        package.verify_archive(archive, hashes)
+        for name in package.NOTICES:
+            with self.subTest(name=name):
+                with tarfile.open(archive, "w:gz") as bundle:
+                    for other in hashes:
+                        if other != name:
+                            bundle.add(staged / other, arcname=f"package/{other}")
+                with self.assertRaisesRegex(ValueError, "file set"):
+                    package.verify_archive(archive, hashes)
+
+    def test_missing_empty_or_symlinked_notices_fail_before_staging(self):
+        for name in package.NOTICES:
+            path = self.source / name
+            original = path.read_bytes()
+            with self.subTest(name=name):
+                path.unlink()
+                with self.assertRaisesRegex(ValueError, "Missing"):
+                    self.stage()
+                path.touch()
+                with self.assertRaisesRegex(ValueError, "empty"):
+                    self.stage()
+                path.unlink()
+                try:
+                    path.symlink_to(self.source / "CHANGELOG.md")
+                except OSError:
+                    pass  # Windows can prohibit symlinks; missing/empty still run.
+                else:
+                    with self.assertRaisesRegex(ValueError, "symlinked"):
+                        self.stage()
+                    path.unlink()
+                path.write_bytes(original)
+
     def test_stale_declarations_fail(self):
         (self.dist / "query.d.mts").write_text("export {};\n")
         with self.assertRaisesRegex(ValueError, "Stale or modified type declaration"):
@@ -75,7 +120,7 @@ class PackageTests(unittest.TestCase):
         for change in ({"private": False}, {"name": "@opentlv/js"}, {"exports": {}},
                        {"scripts": {"prepack": "exit 0"}}, {"dependencies": {}},
                        {"types": "missing.d.ts"}, {"files": ["**/*"]}, {"type": "commonjs"},
-                       {"engines": {"node": ">=18"}}, {"publishConfig": {}}):
+                       {"engines": {"node": ">=18"}}, {"publishConfig": {}}, {"license": "UNLICENSED"}):
             with self.subTest(change=change):
                 shutil.copyfile(package.ROOT / "package.json", self.source / "package.json")
                 self.edit_metadata(**change)

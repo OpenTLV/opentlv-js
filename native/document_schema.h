@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2026 OpenTLV
+// Copyright (c) 2026 Marek Cingel
 /* Owning wasm32 adaptation. Tree, Query and Schema semantics remain in Core. */
 #include <tlv/schema/schema.h>
 
