@@ -12,7 +12,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from migration_compatibility import compare_contracts, compare_additions, verify_historical_inputs
-from migration_compatibility import stage_migration_sources
+from migration_compatibility import BASELINE_LOCK, baseline_lock, stage_migration_sources
 import source_evolution
 
 
@@ -83,6 +83,20 @@ class HistoricalInputsTests(unittest.TestCase):
                              entry["baseline_sha256"])
         for name in evolution["added"]:
             self.assertFalse((target / name).exists())
+        self.assertEqual((target / "cmake/core-source.json").read_bytes(),
+                         (root / BASELINE_LOCK).read_bytes())
+
+    def test_migration_lock_must_name_the_immutable_baseline(self):
+        root = Path(__file__).resolve().parents[1]
+        inventory = json.loads((root / "migration/source-inventory.json").read_text())
+        self.assertEqual(baseline_lock(root, inventory), root / BASELINE_LOCK)
+        lock = json.loads((root / BASELINE_LOCK).read_text())
+        for key in ("commit", "tree"):
+            with self.subTest(key=key):
+                (self.root / "ci").mkdir(exist_ok=True)
+                (self.root / BASELINE_LOCK).write_text(json.dumps(dict(lock, **{key: "0" * 40})))
+                with self.assertRaisesRegex(ValueError, "immutable baseline"):
+                    baseline_lock(self.root, inventory)
 
     def test_exact_inputs_pass(self):
         verify_historical_inputs(self.root, self.inventory)

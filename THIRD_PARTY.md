@@ -10,7 +10,9 @@ contributions do not assign copyright.
 Core is fetched at the immutable revision in `cmake/core-source.json` and linked
 statically into `opentlv-core.wasm`. It is not vendored in this source checkout.
 The package includes the unchanged [Core license](notices/core-LICENSE.txt) from
-`a9a6f9470c2b285744738b40196bef9d0341fead`. Migration source identities remain
+`a9a6f9470c2b285744738b40196bef9d0341fead`. It is byte-identical to `LICENSE` at
+the current Core `v0.8.0` pin (`345c77acb29266036df5f27d04ce315bb61853cc`).
+Recheck it whenever the pin changes. Migration source identities remain
 in `migration/source-inventory.json`; later source changes are checked separately
 by `ci/source-evolution.json`.
 

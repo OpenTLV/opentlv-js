@@ -2,10 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.1.0] - 2026-10-28
 
 ### Changed
 
+- Prepare the first standalone JS/WASM release as `0.1.0`, replacing the unreleased `0.1.0-dev.0` development version independently of Core. Pin Core `v0.8.0` at `345c77acb29266036df5f27d04ce315bb61853cc` and keep the migration compatibility gate on the recorded baseline Core lock (`ci/migration-core-source.json`). Full CI now includes the double-build reproducibility tier and uploads its tested npm archive. The manual `JS Release` workflow replaces the tag-triggered reproducibility run: it requires a changelog closed under the release version, Main on the exact commit and same-attempt Full evidence, publishes that archive with release notes, evidence, checksums and attestations to GitHub Releases, and verifies the tag, notes and uploaded assets before publishing. npm registry publication remains separate. (#32)
 - Correct original-author copyright attribution, add exact-path REUSE coverage and pinned contributor checks, preserve upstream runtime notices in private npm archives, and link shared community/security policies. (#30)
 - Use Ninja provided by the Ubuntu CI runner and verify its availability without refreshing APT package indexes. (#7)
 - Own the private Query/Schema adapters and remaining WASM guide content; build against Core without its removed `bindings/` tree while retaining immutable migration provenance. (OpenTLV/opentlv#698)

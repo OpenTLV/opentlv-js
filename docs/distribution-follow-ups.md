@@ -18,8 +18,10 @@ complete any publication item.
 
 - Decide and verify registry name/scope ownership; the local `opentlv-js` name
   is not a registry reservation or availability claim.
-- Define release versions, tag matching, prerelease/dist-tag policy and the
-  relationship to pinned Core compatibility metadata.
+- Issue #32 defines release versions, `v`-prefixed tag matching and the GitHub
+  release of the tested archive against the pinned Core (`v0.1.0` with Core
+  `v0.8.0`); see [GitHub release](packaging.md#github-release). Registry
+  dist-tags and prerelease policy remain open.
 - Establish authorized publishing identities, trusted publishing or credential
   handling, protected environments and required hosted gates.
 - Bind the exact checked archive to repository commit, workflow run/attempt,
@@ -51,9 +53,13 @@ complete any publication item.
 ## MOD-1: Post-migration modernization (open)
 
 - Review Core pin and Emscripten/Node upgrades separately from source extraction.
+  Issue #32 moves the Core pin to `v0.8.0`; Emscripten/Node upgrades remain open.
 - Replace the historical binary-equality gate deliberately when an intentional
   dependency/runtime change requires it, preserving the immutable baseline and
-  adding evidence for the new compatibility contract.
+  adding evidence for the new compatibility contract. For the Core pin change,
+  the gate now rebuilds the migration from its own recorded lock
+  (`ci/migration-core-source.json`); a toolchain change still needs a reviewed
+  replacement.
 - Keep API redesign and broader facade coverage separate from the migration's
   behavior-preservation result; browser/worker coverage remains tracked under
   DIST-1. TypeScript declarations were added separately in #5.

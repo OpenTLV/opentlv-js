@@ -12,6 +12,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 INPUTS = ("CMakeLists.txt", "cmake", "tlv")
+LOCK = ROOT / "cmake/core-source.json"
 
 
 def digest(data):
@@ -38,8 +39,8 @@ def source_digest(files):
     return digest(json.dumps(sorted(files.items()), separators=(",", ":")).encode())
 
 
-def load_lock():
-    lock = json.loads((ROOT / "cmake/core-source.json").read_text(encoding="utf-8"))
+def load_lock(path=LOCK):
+    lock = json.loads(path.read_text(encoding="utf-8"))
     if (lock["schema"] != 1 or lock["repository"] != "https://github.com/OpenTLV/opentlv.git"
             or not re.fullmatch(r"[0-9a-f]{40}", lock["commit"])
             or not re.fullmatch(r"[0-9a-f]{40}", lock["tree"])

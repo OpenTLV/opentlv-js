@@ -1,17 +1,27 @@
 # Private JS/WASM package preparation
 
 The canonical [package.json](../package.json) defines the independent
-`opentlv-js` version, initially `0.1.0-dev.0`. This is an unreleased development
-identity, not the pinned Core version or a release tag. Change this version
-explicitly when advancing the binding; a Core pin change never changes it
-automatically. Record binding changes under `Unreleased` in
-[CHANGELOG.md](../CHANGELOG.md). Release version/tag policy remains deferred.
+`opentlv-js` version. The first standalone release is `0.1.0` (#32), prepared
+against Core `v0.8.0`. The earlier `0.1.0-dev.0` was an unreleased development
+identity, not a previous JS release; there were no JS repository tags or GitHub
+releases when checked on 2026-10-28. The JS version is not the pinned Core
+version: change it explicitly when advancing the binding; a Core pin change
+never changes it automatically. Record binding changes under `Unreleased` in
+[CHANGELOG.md](../CHANGELOG.md).
 
-The name `opentlv-js` identifies this repository and its private local package.
+Release tags are `vMAJOR.MINOR.PATCH` and must equal `v` plus the
+`package.json` version, the `component_version` in
+[docs-examples.json](../docs-examples.json) and the heading of
+[ci/release-notes.md](../ci/release-notes.md). Prerelease tags and npm
+dist-tags are not used.
+
+The name `opentlv-js` identifies this repository and its package archive.
 No npm registry name or scope is selected or reserved. `private: true` makes npm
 refuse publication, as described in the
 [npm package metadata contract](https://docs.npmjs.com/cli/v10/configuring-npm/package-json/#private).
-No publish command, credentials, lifecycle hook or GitHub release action is added.
+No npm publish command, registry credential or lifecycle hook is added. The
+[GitHub release](#github-release) workflow attaches the tested archive to a
+GitHub release only.
 
 ## Build and check
 
@@ -83,12 +93,81 @@ or symlinked notices fail staging, and archive/installed-consumer checks verify
 their exact bytes. Keep notices with copied runtime assets. See
 [dependency attribution](../THIRD_PARTY.md) before changing Core or toolchains.
 
-All [CI tiers](ci.md) run package checks. The Release reproducibility tier also
+All [CI tiers](ci.md) run package checks. The double-build tier in Full CI also
 compares the complete private archive hash, metadata and file hashes across two
-independent builds. CI evidence includes package reports, but the private npm
-archives are not uploaded as release artifacts. `published` and
-`release_verified` stay false. A passing local run does not establish hosted CI
+independent builds and uploads the first build's archive as
+`js-package-<attempt>`. Package reports keep `published` and `release_verified`
+false: they are build results. A passing local run does not establish hosted CI
 or a verified release.
+
+## GitHub release
+
+The manual `JS Release` workflow
+([js-release.yml](../.github/workflows/js-release.yml)) accepts an unused tag
+matching the versions above. Changes stay under `Unreleased` during
+development; close the changelog under the matching version without the tag's
+`v` prefix and the release date before dispatching the release (for example,
+`## [0.1.0] - 2026-10-28`). The release rejects a changelog without that
+section. The versioned release notes are the publication text.
+
+1. Review and merge the release preparation. Wait for successful JS Main CI on
+   that exact commit. Dispatch `JS Release` on `main` with `tag: v0.1.0`.
+2. `scripts/release.py prepare` rejects a foreign, dirty or non-main checkout, a
+   dispatch from another workflow revision, a changed main tip, an existing tag
+   or release, differing versions or notes, and missing or failed Main CI,
+   including its `JS quality gate`.
+3. The workflow then runs [Full CI](ci.md#tiers) in the same attempt: Release and
+   Debug, the double-build reproducibility tier, migration compatibility,
+   package checks and both quality gates.
+4. Assembly revalidates the request and every Full record against the commit,
+   run, attempt and Core lock. It copies the exact `opentlv-js-<version>.tgz`
+   whose SHA-256 and file hashes the reproduced builds recorded; it does not
+   rebuild it. The workflow attests all four assets: the archive,
+   `release-manifest.json`, `release-notes.md` and `SHA256SUMS`.
+5. Publication rechecks evidence, checksums, attestations and unused tag status,
+   then creates the tag and a draft release. Only after the uploaded asset
+   names, sizes, SHA-256 digests, notes and tag commit match does it publish the
+   draft and verify the public result. It emits `js-published-<attempt>` with
+   the URL, source and asset identities.
+6. Record the published URL, exact commit, Main and release run links in
+   [issue #32](https://github.com/OpenTLV/opentlv-js/issues/32) and
+   [Core epic #718](https://github.com/OpenTLV/opentlv/issues/718). Close the
+   tracking only after publication and asset verification.
+
+If a failure occurs after creating a tag or draft, inspect that state before
+retrying; the workflow refuses to overwrite either. Earlier attempts' artifacts
+cannot satisfy a new attempt. A new main commit or Main run requires a new
+release attempt. Creating the tag does not trigger another workflow.
+
+Install a downloaded release archive after checking it against `SHA256SUMS`
+and its attestation:
+
+```sh
+gh attestation verify opentlv-js-0.1.0.tgz --repo OpenTLV/opentlv-js
+npm install ./opentlv-js-0.1.0.tgz
+```
+
+The archive contains the four runtime files, so consumers do not need
+Emscripten or Core. `packageVersion` reports `0.1.0`; the existing
+`(await loadOpenTLV()).version` reports the embedded Core `0.8.0`.
+
+### Local preparation evidence (2026-10-28)
+
+WSL Ubuntu with Emscripten 4.0.10, Node 22.16.0 and TypeScript 5.9.3 passed the
+PR and Main tiers of `scripts/ci.py` against the fetched Core `v0.8.0` pin: all
+CTest suites, the Core-owned Query fixtures through the source and installed
+facades, the wasm32 Query ABI check and the installed 21-file archive with its
+runtime, example and TypeScript checks. Both tiers produced the same archive
+SHA-256. The changed migration gate was run on its own against the PR build:
+the reconstructed migration sources rebuilt from `ci/migration-core-source.json`
+matched all four historical Core outputs. The Python infrastructure suite passed
+on Linux and Windows. The Core API report lists 197/197 generic symbols
+referenced with 100 exclusions, and the Core pin diff adds or removes no public
+symbols.
+
+Full CI (Debug, double build), attestations and publication were not run
+locally; they require the hosted release run on the merged commit. Local logs are
+under `build/issue32-validation/`; they are not committed release evidence.
 
 ## Separate distribution work
 
