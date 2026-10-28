@@ -19,6 +19,7 @@ REPOSITORY = "OpenTLV/opentlv-js"
 WORKFLOW = ".github/workflows/js-release.yml"
 SIGNER = REPOSITORY + "/" + WORKFLOW
 NOTES = ROOT / "ci/release-notes.md"
+TAG = r"v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)"
 MAIN_GATES = {"checks / JS quality gate"}
 FULL_GATES = {"full / checks / JS quality gate", "full / reproducibility / JS quality gate"}
 # Every Full tier/configuration record the release requires from its own attempt.
@@ -68,8 +69,7 @@ def pages(endpoint, key=None):
 
 
 def version_for(tag):
-    require(re.fullmatch(r"v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)", tag),
-            "Use a stable vMAJOR.MINOR.PATCH tag")
+    require(re.fullmatch(TAG, tag), "Use a stable vMAJOR.MINOR.PATCH tag")
     version = package.metadata(ROOT)["version"]
     require(tag == "v" + version, "Tag differs from the package.json version")
     catalog = read(ROOT / "docs-examples.json")
@@ -141,6 +141,15 @@ def check_gates(run_id, attempt, names):
                 for job in gates), "Missing successful attempt-bound quality gate")
 
 
+def core_release(lock):
+    """Require the Core lock to name an exact release tag, not a development build."""
+    inputs = lock["version_inputs"]
+    require(re.fullmatch(TAG, inputs["tag"]) and inputs["revision"] == 0 and
+            inputs["tag_commit"] == lock["commit"] and inputs["tag"] in inputs["tags_at_commit"],
+            "Core must be locked to an exact vMAJOR.MINOR.PATCH release commit")
+    return lock
+
+
 def preflight(tag):
     version = version_for(tag)
     current = hosted_identity()
@@ -148,7 +157,7 @@ def preflight(tag):
     main = main_evidence(current["commit"])
     check_gates(main["run_id"], main["run_attempt"], MAIN_GATES)
     return {"schema": 1, "tag": tag, "version": version, "identity": current,
-            "core": core.load_lock(), "main": main, "notes_sha256": digest(NOTES)}
+            "core": core_release(core.load_lock()), "main": main, "notes_sha256": digest(NOTES)}
 
 
 def validate_request(request):

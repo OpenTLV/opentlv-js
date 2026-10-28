@@ -112,10 +112,12 @@ section. The versioned release notes are the publication text.
 
 1. Review and merge the release preparation. Wait for successful JS Main CI on
    that exact commit. Dispatch `JS Release` on `main` with `tag: v0.1.0`.
-2. `scripts/release.py prepare` rejects a foreign, dirty or non-main checkout, a
-   dispatch from another workflow revision, a changed main tip, an existing tag
-   or release, differing versions or notes, and missing or failed Main CI,
-   including its `JS quality gate`.
+2. `scripts/release.py prepare` rejects a missing, unprefixed or otherwise
+   malformed tag, a foreign, dirty or non-main checkout, a dispatch from another
+   workflow revision, a changed main tip, an existing tag or release, differing
+   versions, notes or changelog, a Core lock that is not an exact `v` release
+   tag commit (currently Core `v0.8.0`), and missing or failed Main CI,
+   including its `JS quality gate` (#34).
 3. The workflow then runs [Full CI](ci.md#tiers) in the same attempt: Release and
    Debug, the double-build reproducibility tier, migration compatibility,
    package checks and both quality gates.
@@ -137,7 +139,9 @@ section. The versioned release notes are the publication text.
 If a failure occurs after creating a tag or draft, inspect that state before
 retrying; the workflow refuses to overwrite either. Earlier attempts' artifacts
 cannot satisfy a new attempt. A new main commit or Main run requires a new
-release attempt. Creating the tag does not trigger another workflow.
+release attempt. No workflow has a tag-push trigger, so creating or pushing a
+tag cannot run checks or publish outside this gated workflow; a regression test
+enforces this for every workflow.
 
 Install a downloaded release archive after checking it against `SHA256SUMS`
 and its attestation:

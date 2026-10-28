@@ -30,7 +30,8 @@ def workflow(name):
 class Preflight(unittest.TestCase):
     def test_version_and_notes_match_the_first_release(self):
         self.assertEqual(release.version_for("v0.1.0"), "0.1.0")
-        for tag in ("v0.8.0", "0.1.0", "v0.1.0-dev.0", "v00.1.0", "../main"):
+        for tag in ("", "v0.8.0", "0.1.0", "V0.1.0", "v0.1", "v0.1.0-dev.0", "v00.1.0", " v0.1.0",
+                    "../main"):
             with self.subTest(tag=tag), self.assertRaises(ValueError):
                 release.version_for(tag)
 
@@ -44,6 +45,19 @@ class Preflight(unittest.TestCase):
                                       if self.name == "CHANGELOG.md" else original(self, *args, **kwargs)), \
                     self.assertRaisesRegex(ValueError, "changelog"):
                 release.version_for("v0.1.0")
+
+    def test_core_lock_must_be_the_exact_release_commit(self):
+        lock = core.load_lock()
+        self.assertEqual(release.core_release(lock), lock)
+        self.assertEqual(lock["version_inputs"]["tag"], "v0.8.0")
+        inputs = lock["version_inputs"]
+        for change in ({"revision": 40}, {"tag": "0.8.0"}, {"tag_commit": "b" * 40},
+                       {"tags_at_commit": []}):
+            with self.subTest(change=change), self.assertRaisesRegex(ValueError, "Core must"):
+                release.core_release(dict(lock, version_inputs=dict(inputs, **change)))
+        # The migration baseline was an untagged development commit.
+        with self.assertRaisesRegex(ValueError, "Core must"):
+            release.core_release(core.load_lock(release.ROOT / "ci/migration-core-source.json"))
 
     def test_dispatch_requires_official_main_workflow_and_commit(self):
         env = {"GITHUB_EVENT_NAME": "workflow_dispatch", "GITHUB_REF": "refs/heads/main",
@@ -288,9 +302,24 @@ class Payload(unittest.TestCase):
 
 
 class Workflow(unittest.TestCase):
+    def test_no_tag_push_can_trigger_checks_or_publication(self):
+        names = sorted(path.name for path in (release.ROOT / ".github/workflows").glob("*.yml"))
+        self.assertIn("js-release.yml", names)
+        for name in names:
+            text = workflow(name)
+            with self.subTest(workflow=name):
+                self.assertNotIn("tags:", text)
+                if "\n  push:" in text:
+                    self.assertEqual(name, "js-main.yml")
+                    self.assertIn("  push:\n    branches: [main]\n", text)
+                if name != "js-release.yml":
+                    self.assertNotIn("contents: write", text)
+                    self.assertNotIn("release.py", text)
+
     def test_release_runs_full_before_attesting_and_publishing(self):
         text = workflow("js-release.yml")
         self.assertIn("on:\n  workflow_dispatch:\n    inputs:\n      tag:", text)
+        self.assertIn("        required: true\n        type: string\n", text)
         self.assertNotIn("push:", text)
         self.assertIn("  full:\n    needs: prepare\n    uses: ./.github/workflows/js-full.yml\n", text)
         self.assertIn("  assemble:\n    needs: [prepare, full]\n", text)
