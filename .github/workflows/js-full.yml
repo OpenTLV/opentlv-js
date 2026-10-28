@@ -14,3 +14,7 @@ jobs:
     uses: ./.github/workflows/js-checks.yml
     with:
       tier: full
+  reproducibility:
+    uses: ./.github/workflows/js-checks.yml
+    with:
+      tier: release

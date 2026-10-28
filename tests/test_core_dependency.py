@@ -115,15 +115,22 @@ class CoreSelectionTests(unittest.TestCase):
 
 
 class SourceLockTests(unittest.TestCase):
-    def test_lock_checksum_matches_recorded_baseline_inputs(self):
+    def test_migration_lock_checksum_matches_recorded_baseline_inputs(self):
         inventory = json.loads((core.ROOT / "migration/source-inventory.json").read_text())
         files = {entry["path"]: entry["sha256"] for entry in inventory["files"]
                  if any(entry["path"] == prefix or entry["path"].startswith(prefix + "/")
                         for prefix in core.INPUTS)}
-        lock = core.load_lock()
+        lock = core.load_lock(core.ROOT / "ci/migration-core-source.json")
         self.assertEqual(lock["commit"], inventory["commit"])
         self.assertEqual(lock["tree"], inventory["tree"])
         self.assertEqual(core.source_digest(files), lock["source_sha256"])
+
+    def test_current_lock_pins_the_core_release_commit(self):
+        lock = core.load_lock()
+        self.assertEqual(lock["commit"], "345c77acb29266036df5f27d04ce315bb61853cc")
+        self.assertEqual(lock["version_inputs"], {
+            "tag": "v0.8.0", "tag_commit": lock["commit"], "revision": 0,
+            "short_commit": lock["commit"][:9], "branch": "HEAD", "tags_at_commit": ["v0.8.0"]})
 
 
 if __name__ == "__main__":

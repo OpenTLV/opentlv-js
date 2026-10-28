@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "repository": "https://github.com/OpenTLV/opentlv.git",
+  "commit": "a9a6f9470c2b285744738b40196bef9d0341fead",
+  "tree": "d1f63cbc2064a5d19c3dd6f19b97ddab427cfe64",
+  "source_sha256": "35e6e34d8a65fe043a6776ce7bfbf55aa732f158d6c3e8932706b494f6d8c592",
+  "version_inputs": {
+    "tag": "0.7.1",
+    "tag_commit": "e12a52ff69a64468eecab084795a0530c273efea",
+    "revision": 40,
+    "short_commit": "a9a6f9470",
+    "branch": "HEAD",
+    "tags_at_commit": [
+      "0.7.1"
+    ]
+  }
+}

@@ -1,13 +1,15 @@
 # OpenTLV JavaScript / WebAssembly
 
 Experimental JavaScript facade and WebAssembly bridge for
-[OpenTLV](https://github.com/OpenTLV/opentlv-js). This is a **private local test
-package**, not an npm release. `opentlv-js` is the repository/local package
-identity; it does not reserve or promise a registry name or scope.
+[OpenTLV](https://github.com/OpenTLV/opentlv-js). This archive is distributed
+through GitHub Releases; it is **not published to the npm registry** and stays
+`private`. `opentlv-js` is the repository/local package identity; it does not
+reserve or promise a registry name or scope.
 
 ## Usage
 
-After installing a locally prepared archive into a Node 22 project:
+After installing the archive into a Node 22 project, for example with
+`npm install ./opentlv-js-0.1.0.tgz`:
 
 ```js
 import { loadOpenTLV, hexToBytes, packageVersion } from "opentlv-js";
@@ -58,7 +60,8 @@ changes. The existing `tlv.version` and `_opentlv_wasm_version()` retain their
 Core-version meaning. `package-info.json` records the selected Core commit,
 source checksum, version inputs and hashes of the four outputs separately.
 It explicitly sets `release_verified: false`; it is build information, not
-release attestation.
+release attestation. GitHub release assets have separate build provenance
+attestations and a `release-manifest.json` with the hosted evidence.
 
 The package has no runtime npm dependencies or lifecycle hooks and remains
 `private: true`. Registry publishing, component support commitments and

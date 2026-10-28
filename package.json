@@ -1,6 +1,6 @@
 {
   "name": "opentlv-js",
-  "version": "0.1.0-dev.0",
+  "version": "0.1.0",
   "private": true,
   "description": "Experimental OpenTLV JavaScript facade and WebAssembly bridge",
   "license": "MIT",

@@ -81,11 +81,11 @@ def verify_query_inputs(source, commit):
     return dict(commit=commit, input_count=len(expected), source_sha256=core.source_digest(expected))
 
 
-def read_selection(build):
+def read_selection(build, lock=core.LOCK):
     receipt = json.loads((build / "core-selection.json").read_text(encoding="utf-8"))
     if receipt["mode"] != "pinned-source":
         raise ValueError("CI requires pinned-source Core, not a local development override")
-    current = core.inspect(Path(receipt["source"]), "pinned-source", core.load_lock())
+    current = core.inspect(Path(receipt["source"]), "pinned-source", core.load_lock(lock))
     if current != receipt:
         raise ValueError("Core selection changed after configuration")
     return receipt

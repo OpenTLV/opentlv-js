@@ -101,6 +101,13 @@ jobs:
           name: js-wasm-${{ inputs.tier }}-${{ matrix.configuration }}-${{ github.run_attempt }}
           path: build/ci/${{ inputs.tier }}/${{ matrix.configuration }}/first/dist/
           if-no-files-found: error
+      # The release workflow publishes exactly this reproduced, installed and tested archive.
+      - uses: actions/upload-artifact@v4
+        if: success() && inputs.tier == 'release'
+        with:
+          name: js-package-${{ github.run_attempt }}
+          path: build/ci/release/Release/first-package/opentlv-js-*.tgz
+          if-no-files-found: error
   gate:
     name: JS quality gate
     if: always()

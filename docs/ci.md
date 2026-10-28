@@ -17,10 +17,10 @@ availability without an APT update or dependency on Ubuntu package mirrors.
 | --- | --- | --- |
 | JS Pull Request CI | PR targeting `main`, without path filters | Release build, smoke, parse example, Query facade, WASM Query ABI, private package checks |
 | JS Main CI | Push to `main` | Same checks on the actual merged commit; upload outputs |
-| JS Full CI | Manual or reusable workflow call | Release and Debug, each with the same checks; upload outputs |
-| JS Release reproducibility | Version-shaped tag push or manual rehearsal | Two fresh Release builds, all checks in each, compare all four output and private package hashes |
+| JS Full CI | Manual or reusable workflow call | Release and Debug, each with the same checks; separately two fresh Release builds, all checks in each, comparing all four output and private package hashes; upload outputs and the tested archive |
+| JS Release | Manual dispatch on `main` with an unused tag | Requires successful Main CI on the commit, runs Full in the same attempt, then attests and publishes the tested archive as a GitHub release |
 
-Full's Release configuration and the Release workflow additionally rebuild the
+Full's Release configuration and its double-build tier additionally rebuild the
 historical Core WASM target and require migration compatibility as described
 below. Debug retains its own runtime/package checks without comparison to a
 Release binary.
@@ -33,13 +33,18 @@ the existing build helpers still support Python 3.9+. See the
 and [attribution scope](../THIRD_PARTY.md) for generated/runtime files.
 The reusable `js-checks.yml` provides a final
 `JS quality gate` that requires every infrastructure and runtime job to succeed;
-failed, cancelled or skipped prerequisites cannot pass it. Branch protection is
-configured separately in GitHub and must require the PR gate.
+failed, cancelled or skipped prerequisites cannot pass it. Full CI calls it
+twice, as `checks` (tier `full`) and `reproducibility` (tier `release`), so it
+has two gates. Branch protection is configured separately in GitHub and must
+require the PR gate.
 
-The tag patterns preserve the baseline's unprefixed and `v`-prefixed version
-shapes. They are triggers, not a package version policy. A manual Release run
-rehearses the same checks without creating a tag. No workflow publishes an npm
-package, creates a GitHub release or claims release attestation.
+The double-build runner tier keeps its name `release`
+(`scripts/ci.py --tier release`); hosted runs use it through Full CI, and a
+manual Full run rehearses it without creating a tag. Tag pushes no longer
+trigger a workflow. Only the `JS Release` workflow creates a tag, after its
+gates pass, and it publishes the tested archive and attestations to GitHub
+Releases as described in [GitHub release](packaging.md#github-release). No
+workflow publishes an npm package.
 
 ## Pinned Core API reference report
 
@@ -142,7 +147,7 @@ work. Generic tests run as CTests and against the installed archive.
 
 `ci/source-evolution.json` records reviewed changed/added source hashes and exact
 reversible changes for #3 through #7. The original migration inventory, build-adaptation
-hashes, Core pin and 57 bridge declarations remain immutable. The source
+hashes, migration Core lock and 57 bridge declarations remain immutable. The source
 verifier checks current additions, restores the recorded migration bytes in
 memory, and verifies those against the original hashes/Git objects. Unknown
 files, unrecorded edits and stale restoration rules fail verification.
@@ -229,7 +234,14 @@ recorded in each package report.
 `scripts/migration_compatibility.py` rebuilds the original WASM target from the
 verified Core checkout at `a9a6f9470c2b285744738b40196bef9d0341fead`, using the
 Release flags in the immutable source inventory and a fresh
-`migration-baseline/` build directory. Historical bridge/helper inputs are
+`migration-baseline/` build directory. Since the Core `v0.8.0` pin (#32), the
+current build no longer provides that checkout. The gate first configures the
+reconstructed migration sources with their own Core lock,
+[ci/migration-core-source.json](../ci/migration-core-source.json), whose commit
+and tree must equal the immutable inventory. That fetched and verified
+checkout then provides the historical target. The reconstructed build always
+runs, and the result records `current_core_commit` with
+`current_is_migration_baseline: false`. Historical bridge/helper inputs are
 checked for exact file membership and SHA-256 before configuration and after
 comparison. The standalone source verifier also compares its ten transferred
 files with the original Git objects. The historical build runs its two CTests.
@@ -246,8 +258,10 @@ The CI result includes `migration_compatibility` only after this check succeeds;
 `migration-*-contract.json` and command logs accompany the report. This is
 distinct from double-build reproducibility: the latter compares two standalone
 builds and their private archives; migration compares the old and new build
-systems. Future intentional runtime changes or a Core/toolchain upgrade need a
-reviewed replacement for this migration gate, retaining the historical record.
+systems. Core pin upgrades keep this comparison on the recorded baseline
+lock; the current build is then checked only for its reviewed public contract.
+Future intentional runtime or toolchain changes need a reviewed replacement for
+this migration gate, retaining the historical record.
 Neither check establishes browser/worker execution or release authorization.
 
 See the [dated migration acceptance review](../MIGRATION.md#validation-review-14)
