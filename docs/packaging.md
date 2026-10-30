@@ -1,7 +1,7 @@
 # Private JS/WASM package preparation
 
 The canonical [package.json](../package.json) defines the independent
-`opentlv-js` version. The first standalone release is `0.1.0` (#32), prepared
+`@opentlv/opentlv` version. The first standalone release is `0.1.0` (#32), prepared
 against Core `v0.8.0`. The earlier `0.1.0-dev.0` was an unreleased development
 identity, not a previous JS release; there were no JS repository tags or GitHub
 releases when checked on 2026-10-28. The JS version is not the pinned Core
@@ -15,13 +15,35 @@ Release tags are `vMAJOR.MINOR.PATCH` and must equal `v` plus the
 [ci/release-notes.md](../ci/release-notes.md). Prerelease tags and npm
 dist-tags are not used.
 
-The name `opentlv-js` identifies this repository and its package archive.
-No npm registry name or scope is selected or reserved. `private: true` makes npm
-refuse publication, as described in the
+`private: true` makes npm refuse publication, as described in the
 [npm package metadata contract](https://docs.npmjs.com/cli/v10/configuring-npm/package-json/#private).
 No npm publish command, registry credential or lifecycle hook is added. The
 [GitHub release](#github-release) workflow attaches the tested archive to a
 GitHub release only.
+
+## Package identity
+
+The package is `@opentlv/opentlv`, selected in #37 and checked on 2026-10-30:
+
+| Item | Decision | Evidence |
+| --- | --- | --- |
+| Organization | `opentlv` | The public registry lists the scope with no packages (`/-/org/opentlv/package` returns `{}`) |
+| Owner | npm account `marekcingel` | Recorded by the maintainer in [#36](https://github.com/OpenTLV/opentlv-js/issues/36); the registry does not show it without signing in |
+| Package name | `@opentlv/opentlv` | The registry has no such package (`404`), so nothing has been published under it |
+| Access | Public once published | Scoped packages need an [explicit `--access public`](https://docs.npmjs.com/creating-and-publishing-scoped-public-packages/) |
+
+The scope limits who can publish, while the package name is created only by its
+first publication. Selecting the name therefore publishes nothing and changes no
+access: `private: true` stays until the separately approved publication.
+Publishing with `--access public` belongs to
+[#39](https://github.com/OpenTLV/opentlv-js/issues/39), so `publishConfig` remains
+rejected here. Whether the organization enforces 2FA for all members still has
+to be confirmed in its npm settings; it is not visible from the public registry.
+
+`opentlv-js` remains the name of the repository, its CMake targets and the
+migration owner. Imports use `@opentlv/opentlv`, and `npm pack` names the archive
+`opentlv-opentlv-<version>.tgz`. The `v0.1.0` GitHub release predates this
+selection: its asset stays `opentlv-js-0.1.0.tgz` and is imported as `opentlv-js`.
 
 ## Build and check
 
@@ -62,7 +84,7 @@ fixtures through the installed package's original facade runner.
 The source checkout is a metadata/build source, not an installable package:
 generated `index.mjs`, `version.mjs` and `dist/` live only in the staging area.
 Do not pack or install the source root directly. For local experimentation,
-install the checked `build/package-check/opentlv-js-<version>.tgz` archive.
+install the checked `build/package-check/opentlv-opentlv-<version>.tgz` archive.
 The exact archive name, hashes and commands are in `build/package-check/result.json`.
 
 ## API and evidence
@@ -71,7 +93,7 @@ The [package README](../packaging/README.md) describes each export and asset
 location. The four original runtime filenames remain unchanged; API additions
 are tracked separately from the immutable migration baseline.
 `packaging/index.mjs` re-exports the existing facade and adds `packageVersion`.
-The `opentlv-js/version` subpath exposes that value without loading the facade.
+The `@opentlv/opentlv/version` subpath exposes that value without loading the facade.
 Existing `(await loadOpenTLV()).version` and the C bridge version entry point continue
 to identify Core, preserving their migration contract.
 
@@ -122,7 +144,7 @@ section. The versioned release notes are the publication text.
    Debug, the double-build reproducibility tier, migration compatibility,
    package checks and both quality gates.
 4. Assembly revalidates the request and every Full record against the commit,
-   run, attempt and Core lock. It copies the exact `opentlv-js-<version>.tgz`
+   run, attempt and Core lock. It copies the exact `opentlv-opentlv-<version>.tgz`
    whose SHA-256 and file hashes the reproduced builds recorded; it does not
    rebuild it. The workflow attests all four assets: the archive,
    `release-manifest.json`, `release-notes.md` and `SHA256SUMS`.
@@ -147,8 +169,8 @@ Install a downloaded release archive after checking it against `SHA256SUMS`
 and its attestation:
 
 ```sh
-gh attestation verify opentlv-js-0.1.0.tgz --repo OpenTLV/opentlv-js
-npm install ./opentlv-js-0.1.0.tgz
+gh attestation verify opentlv-opentlv-<version>.tgz --repo OpenTLV/opentlv-js
+npm install ./opentlv-opentlv-<version>.tgz
 ```
 
 The archive contains the four runtime files, so consumers do not need

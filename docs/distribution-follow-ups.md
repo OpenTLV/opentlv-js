@@ -16,8 +16,9 @@ complete any publication item.
 
 ## NPM-1: Registry publication (open)
 
-- Decide and verify registry name/scope ownership; the local `opentlv-js` name
-  is not a registry reservation or availability claim.
+- Issue #37 selects `@opentlv/opentlv` in the `opentlv` organization; see
+  [Package identity](packaging.md#package-identity). Confirming organization-wide
+  2FA enforcement remains open.
 - Issue #32 defines release versions, `v`-prefixed tag matching and the GitHub
   release of the tested archive against the pinned Core (`v0.1.0` with Core
   `v0.8.0`); see [GitHub release](packaging.md#github-release). Registry

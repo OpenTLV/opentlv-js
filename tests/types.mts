@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Marek Cingel
 
-import { loadOpenTLV, hexToBytes, packageVersion } from 'opentlv-js';
-import type { Document, Node, SchemaTable, QueryAPI, Scalar } from 'opentlv-js';
-import { loadOpenTLV as direct } from 'opentlv-js/opentlv.mjs';
-import { queryFacade } from 'opentlv-js/query.mjs';
-import { packageVersion as version } from 'opentlv-js/version';
+import { loadOpenTLV, hexToBytes, packageVersion } from '@opentlv/opentlv';
+import type { Document, Node, SchemaTable, QueryAPI, Scalar } from '@opentlv/opentlv';
+import { loadOpenTLV as direct } from '@opentlv/opentlv/opentlv.mjs';
+import { queryFacade } from '@opentlv/opentlv/query.mjs';
+import { packageVersion as version } from '@opentlv/opentlv/version';
 const api = await loadOpenTLV();
 const same: typeof loadOpenTLV = direct;
 const factory: (module: unknown) => QueryAPI = queryFacade;

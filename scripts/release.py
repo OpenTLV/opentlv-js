@@ -225,7 +225,7 @@ def assemble(evidence, output):
     validate_request(request)
     records = load_records(evidence / "records")
     tested = check_full(records, request)
-    name = f"opentlv-js-{request['version']}.tgz"
+    name = f"{package.ARCHIVE_PREFIX}-{request['version']}.tgz"
     require({path.name for path in (evidence / "package").iterdir()} == {name},
             "Unexpected package archive set")
     check_archive(evidence / "package" / name, tested)
@@ -249,7 +249,7 @@ def verify_payload(directory):
                for record in manifest["records"]}
     tested = check_full(records, request)
     require(manifest["package"] == tested, "Release package identity differs")
-    archive = f"opentlv-js-{request['version']}.tgz"
+    archive = f"{package.ARCHIVE_PREFIX}-{request['version']}.tgz"
     names = {archive, "release-manifest.json", "release-notes.md"}
     require({path.name for path in directory.iterdir()} == names | {"SHA256SUMS"},
             "Unexpected release asset set")

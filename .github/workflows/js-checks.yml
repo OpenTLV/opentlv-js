@@ -106,7 +106,7 @@ jobs:
         if: success() && inputs.tier == 'release'
         with:
           name: js-package-${{ github.run_attempt }}
-          path: build/ci/release/Release/first-package/opentlv-js-*.tgz
+          path: build/ci/release/Release/first-package/opentlv-opentlv-*.tgz
           if-no-files-found: error
   gate:
     name: JS quality gate

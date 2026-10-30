@@ -3,13 +3,13 @@
 // Copied outside the source tree and run against the installed local archive.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import * as entry from "opentlv-js";
-import * as facade from "opentlv-js/opentlv.mjs";
-import { queryFacade } from "opentlv-js/query.mjs";
-import createOpenTLV from "opentlv-js/opentlv-core.js";
-import { packageVersion } from "opentlv-js/version";
+import * as entry from "@opentlv/opentlv";
+import * as facade from "@opentlv/opentlv/opentlv.mjs";
+import { queryFacade } from "@opentlv/opentlv/query.mjs";
+import createOpenTLV from "@opentlv/opentlv/opentlv-core.js";
+import { packageVersion } from "@opentlv/opentlv/version";
 
-const metadata = JSON.parse(await readFile(new URL(import.meta.resolve("opentlv-js/package.json"))));
+const metadata = JSON.parse(await readFile(new URL(import.meta.resolve("@opentlv/opentlv/package.json"))));
 assert.equal(metadata.private, true);
 assert.equal(packageVersion, metadata.version);
 assert.equal(entry.packageVersion, metadata.version);
@@ -17,7 +17,7 @@ assert.deepEqual(Object.keys(entry).sort(), [...Object.keys(facade), "packageVer
 for (const name of Object.keys(facade)) assert.equal(entry[name], facade[name]);
 assert.equal(typeof queryFacade, "function");
 assert.equal(typeof createOpenTLV, "function");
-const wasmURL = new URL(import.meta.resolve("opentlv-js/opentlv-core.wasm"));
+const wasmURL = new URL(import.meta.resolve("@opentlv/opentlv/opentlv-core.wasm"));
 assert.equal(WebAssembly.validate(await readFile(wasmURL)), true);
 
 const api = await entry.loadOpenTLV();
@@ -35,6 +35,6 @@ await entry.loadOpenTLV({ locateFile(name) {
   return wasmURL.href;
 } });
 assert.equal(located, true);
-assert.throws(() => import.meta.resolve("opentlv-js/dist/query.mjs"),
+assert.throws(() => import.meta.resolve("@opentlv/opentlv/dist/query.mjs"),
               { code: "ERR_PACKAGE_PATH_NOT_EXPORTED" });
 console.log(JSON.stringify({ packageVersion, coreVersion: api.version, exports: Object.keys(metadata.exports) }));

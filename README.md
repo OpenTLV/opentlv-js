@@ -199,7 +199,7 @@ python -B scripts/package.py --build build-wasm --output build/package-check
 This stages the four existing outputs, checks a local npm archive and installs
 it offline into an isolated Node 22 consumer. Nothing is published. Use the
 checked archive rather than installing the source checkout. The package root
-adds `packageVersion`; `opentlv-js/version` exposes it without loading WASM.
+adds `packageVersion`; `@opentlv/opentlv/version` exposes it without loading WASM.
 The existing `(await loadOpenTLV()).version` continues to report the embedded Core
 version. Core provenance is recorded separately in `package-info.json`.
 The manual `JS Release` workflow attaches the archive tested by hosted Full CI
@@ -207,8 +207,9 @@ to a GitHub release; see [GitHub release](docs/packaging.md#github-release).
 
 See the [packaging guide](docs/packaging.md),
 [package API/asset README](packaging/README.md) and
-[separate distribution follow-ups](docs/distribution-follow-ups.md). The local
-name does not reserve or promise an npm registry name/scope.
+[separate distribution follow-ups](docs/distribution-follow-ups.md). The package
+name `@opentlv/opentlv` is [selected for npm](docs/packaging.md#package-identity)
+but not published.
 
 ## Ownership
 

@@ -13,6 +13,9 @@ import sys
 import tarfile
 
 ROOT = Path(__file__).resolve().parents[1]
+NAME = "@opentlv/opentlv"
+# npm pack drops the "@" and turns the scope separator into "-".
+ARCHIVE_PREFIX = "opentlv-opentlv"
 OUTPUTS = ("opentlv-core.js", "opentlv-core.wasm", "opentlv.mjs", "query.mjs")
 EXPORTS = {
     ".": {"types": "./index.d.mts", "import": "./index.mjs"},
@@ -50,8 +53,8 @@ def metadata(root=ROOT):
     data = json.loads(read_file(root / "package.json"))
     if not isinstance(data.get("version"), str) or not SEMVER.fullmatch(data["version"]):
         raise ValueError("Package version must be independent SemVer")
-    if data.get("name") != "opentlv-js" or data.get("private") is not True:
-        raise ValueError("The local package must remain private and named opentlv-js")
+    if data.get("name") != NAME or data.get("private") is not True:
+        raise ValueError(f"The local package must remain private and named {NAME}")
     if data.get("type") != "module" or data.get("main") != "./index.mjs" or data.get("exports") != EXPORTS:
         raise ValueError("Package ESM exports do not match the existing artifacts")
     if (set(data.get("files", [])) != FILES - {"package.json"}
@@ -163,7 +166,8 @@ def check(build, output):
                                        separate_stderr=True))
         verify_inventory(packed, hashes)
         filename = packed[0]["filename"]
-        if Path(filename).name != filename or not filename.endswith(".tgz"):
+        if (Path(filename).name != filename or not filename.startswith(f"{ARCHIVE_PREFIX}-")
+                or not filename.endswith(".tgz")):
             raise ValueError("Unexpected npm archive filename")
         archive = output / filename
         verify_archive(archive, hashes)
@@ -172,7 +176,7 @@ def check(build, output):
         (consumer / "package.json").write_text('{"private":true,"type":"module"}\n', encoding="utf-8")
         runner.run("install", npm, "install", "--prefix", consumer, archive, *common,
                    "--no-audit", "--no-fund", "--package-lock=false")
-        installed = consumer / "node_modules/opentlv-js"
+        installed = consumer / "node_modules" / NAME
         for name, expected in hashes.items():
             if digest(read_file(installed / name)) != expected:
                 raise ValueError(f"Installed package differs: {name}")

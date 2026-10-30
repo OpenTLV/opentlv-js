@@ -3,16 +3,16 @@
 Experimental JavaScript facade and WebAssembly bridge for
 [OpenTLV](https://github.com/OpenTLV/opentlv-js). This archive is distributed
 through GitHub Releases; it is **not published to the npm registry** and stays
-`private`. `opentlv-js` is the repository/local package identity; it does not
-reserve or promise a registry name or scope.
+`private`. `@opentlv/opentlv` is the name selected for the npm registry; nothing
+has been published under it.
 
 ## Usage
 
 After installing the archive into a Node 22 project, for example with
-`npm install ./opentlv-js-0.1.0.tgz`:
+`npm install ./opentlv-opentlv-<version>.tgz`:
 
 ```js
-import { loadOpenTLV, hexToBytes, packageVersion } from "opentlv-js";
+import { loadOpenTLV, hexToBytes, packageVersion } from "@opentlv/opentlv";
 
 const tlv = await loadOpenTLV();
 console.log(packageVersion); // Independent JS package version.
@@ -23,7 +23,7 @@ console.log(tlv.parse(hexToBytes("6F 03 84 01 41"), { format: "ber" }));
 Read the binding version without importing the WASM loader:
 
 ```js
-import { packageVersion } from "opentlv-js/version";
+import { packageVersion } from "@opentlv/opentlv/version";
 ```
 
 The package root exports `loadOpenTLV`, `hexToBytes`, `FORMATS`, `MODULES` and
@@ -31,12 +31,12 @@ The package root exports `loadOpenTLV`, `hexToBytes`, `FORMATS`, `MODULES` and
 
 | Import | Contract |
 | --- | --- |
-| `opentlv-js/opentlv.mjs` | Original JavaScript facade, unchanged |
-| `opentlv-js/query.mjs` | Original `queryFacade(wasm)` factory |
-| `opentlv-js/opentlv-core.js` | Default Emscripten `createOpenTLV` factory |
-| `opentlv-js/opentlv-core.wasm` | Binary asset URL/path, not a JavaScript module |
-| `opentlv-js/version` | Independent `packageVersion` constant |
-| `opentlv-js/package.json` | Package metadata |
+| `@opentlv/opentlv/opentlv.mjs` | Original JavaScript facade, unchanged |
+| `@opentlv/opentlv/query.mjs` | Original `queryFacade(wasm)` factory |
+| `@opentlv/opentlv/opentlv-core.js` | Default Emscripten `createOpenTLV` factory |
+| `@opentlv/opentlv/opentlv-core.wasm` | Binary asset URL/path, not a JavaScript module |
+| `@opentlv/opentlv/version` | Independent `packageVersion` constant |
+| `@opentlv/opentlv/package.json` | Package metadata |
 
 ESM is the supported module interface. There are no CommonJS entry points.
 TypeScript declarations cover the loaded API, including Document, Query and
@@ -49,7 +49,7 @@ The four original outputs are adjacent in `dist/`. The default loader locates
 `opentlv-core.wasm` beside `opentlv-core.js`; preserve that arrangement when
 copying assets. `loadOpenTLV({ locateFile: name => "/assets/" + name })` can select
 another served location. In Node ESM, use
-`import.meta.resolve("opentlv-js/opentlv-core.wasm")` to obtain the asset URL.
+`import.meta.resolve("@opentlv/opentlv/opentlv-core.wasm")` to obtain the asset URL.
 Browsers need relative URLs or an import map; package export maps are not a
 browser module resolver.
 

@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Select `@opentlv/opentlv` in the `opentlv` npm organization as the package identity, verified against the public registry, and document ownership and public access. Package imports and the release archive `opentlv-opentlv-<version>.tgz` use the new name, while the package stays `private: true` and nothing is published. The `opentlv-js` repository name and the published `v0.1.0` release asset are unchanged. (#37)
+
 ## [0.1.0] - 2026-10-28
 
 ### Changed

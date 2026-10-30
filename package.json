@@ -1,5 +1,5 @@
 {
-  "name": "opentlv-js",
+  "name": "@opentlv/opentlv",
   "version": "0.1.0",
   "private": true,
   "description": "Experimental OpenTLV JavaScript facade and WebAssembly bridge",
