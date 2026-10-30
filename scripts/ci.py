@@ -161,7 +161,7 @@ def build_and_check(runner, output, configuration, name):
         if (package_output / "result.json").is_file():
             shutil.copyfile(package_output / "result.json", runner.evidence / f"{name}-package.json")
     package_result = json.loads((package_output / "result.json").read_text(encoding="utf-8"))
-    installed_dist = package_output / "consumer/node_modules/opentlv-js/dist"
+    installed_dist = package_output / "consumer/node_modules/@opentlv/opentlv/dist"
     runner.run(f"{name}-package-facade", "node", ROOT / "tests/query/wasm_facade.mjs", installed_dist, fixture)
     return dict(core=selection, query_inputs=query, outputs=output_hashes(dist),
                 package={key: package_result[key] for key in ("version", "archive_sha256", "files")})

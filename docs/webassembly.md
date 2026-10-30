@@ -275,7 +275,7 @@ establish browser or worker runtime validation.
 
 The independent JS package version comes from [package.json](../package.json).
 The [private package guide](packaging.md) documents `packageVersion` and
-`opentlv-js/version`. The existing `(await loadOpenTLV()).version` identifies the
+`@opentlv/opentlv/version`. The existing `(await loadOpenTLV()).version` identifies the
 embedded Core, not the JS package. The example catalog records the JS version;
 a documentation pin does not establish compatibility with the portal's Core pin.
 

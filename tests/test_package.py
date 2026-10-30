@@ -116,8 +116,17 @@ class PackageTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Stale or modified type declaration"):
             self.stage()
 
+    def test_package_identity_is_the_selected_private_scoped_name(self):
+        data = package.metadata(self.source)
+        self.assertEqual(data["name"], "@opentlv/opentlv")
+        self.assertIs(data["private"], True)
+        self.assertEqual(package.ARCHIVE_PREFIX, "opentlv-opentlv")
+        self.stage()
+        info = json.loads((self.root / "stage/package-info.json").read_text())
+        self.assertEqual(info["name"], "@opentlv/opentlv")
+
     def test_publishable_or_inaccurate_metadata_fails(self):
-        for change in ({"private": False}, {"name": "@opentlv/js"}, {"exports": {}},
+        for change in ({"private": False}, {"name": "opentlv-js"}, {"name": "@opentlv/js"}, {"exports": {}},
                        {"scripts": {"prepack": "exit 0"}}, {"dependencies": {}},
                        {"types": "missing.d.ts"}, {"files": ["**/*"]}, {"type": "commonjs"},
                        {"engines": {"node": ">=18"}}, {"publishConfig": {}}, {"license": "UNLICENSED"}):

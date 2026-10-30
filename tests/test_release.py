@@ -133,7 +133,7 @@ class Payload(unittest.TestCase):
                         "identity": copy.deepcopy(IDENTITY), "core": lock,
                         "main": {"run_id": 100, "run_attempt": 1, "url": "main-url"},
                         "notes_sha256": release.digest(release.NOTES)}
-        self.archive = self.evidence / "package/opentlv-js-0.1.0.tgz"
+        self.archive = self.evidence / "package/opentlv-opentlv-0.1.0.tgz"
         self.archive.parent.mkdir(parents=True)
         files = {"package.json": b'{"version":"0.1.0"}\n', "dist/opentlv-core.wasm": b"\0asm"}
         self.write_archive(self.archive, files)
@@ -338,7 +338,7 @@ class Workflow(unittest.TestCase):
         checks = workflow("js-checks.yml")
         self.assertIn("if: success() && inputs.tier == 'release'", checks)
         self.assertIn("name: js-package-${{ github.run_attempt }}", checks)
-        self.assertIn("path: build/ci/release/Release/first-package/opentlv-js-*.tgz", checks)
+        self.assertIn("path: build/ci/release/Release/first-package/opentlv-opentlv-*.tgz", checks)
 
 
 if __name__ == "__main__":
