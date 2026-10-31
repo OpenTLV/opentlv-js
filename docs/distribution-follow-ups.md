@@ -29,6 +29,8 @@ complete any publication item.
   checksum and provenance; establish retention and verification of evidence.
 - Review package contents/license obligations and publish/install verification,
   rollback/deprecation policy and registry account recovery.
+- Issue #38 records what publication still has to change; see
+  [Archive audit](packaging.md#archive-audit-38).
 - Remove `private: true` only in the separately reviewed publication change.
 
 ## SEC-1: Security and advisory process (open)
@@ -43,8 +45,9 @@ complete any publication item.
 
 ## DIST-1: Distribution improvements (open)
 
-- Validate browsers, workers, bundlers and asset URL deployment before claiming
-  those package environments are supported.
+- Issue #38 checks the installed archive in headless Chrome, as a module page and
+  a module worker with `locateFile`. Validate other browsers, the full API in
+  browsers, bundlers and deployed asset URLs before claiming them.
 - Decide CDN/static hosting, source maps and any
   additional module interfaces based on tested consumer requirements.
 - Keep wrapper semantics, Core ownership and WASM memory/lifetime contracts;
@@ -62,5 +65,5 @@ complete any publication item.
   (`ci/migration-core-source.json`); a toolchain change still needs a reviewed
   replacement.
 - Keep API redesign and broader facade coverage separate from the migration's
-  behavior-preservation result; browser/worker coverage remains tracked under
+  behavior-preservation result; remaining browser/worker coverage is tracked under
   DIST-1. TypeScript declarations were added separately in #5.

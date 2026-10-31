@@ -47,7 +47,9 @@ selection: its asset stays `opentlv-js-0.1.0.tgz` and is imported as `opentlv-js
 
 ## Build and check
 
-Activate Emscripten 4.0.10, Node 22 (including npm) and TypeScript 5.9.3 (`tsc` on `PATH`), then run:
+Activate Emscripten 4.0.10, Node 22 (including npm) and TypeScript 5.9.3 (`tsc` on
+`PATH`), and provide Chrome or Chromium (`google-chrome`, `chromium` or
+`chromium-browser` on `PATH`, or `OPENTLV_BROWSER` set to its path), then run:
 
 ```sh
 emcmake cmake -S . -B build-wasm -G Ninja -DCMAKE_BUILD_TYPE=Release
@@ -62,7 +64,7 @@ in `<build>/dist/`, the WASM header and wrapper equality with `src/*.mjs`.
 It runs the smoke, Format/field and Reader/Writer streaming suites and their
 parse, fields and streaming examples against the installed package. It also runs
 the Document/Schema suite and example, and compiles the installed TypeScript
-consumer with strict NodeNext and Bundler resolution.
+consumer with strict NodeNext and Bundler resolution, without the DOM library.
 These checks establish local package consistency, not attestation of arbitrary
 prebuilt binaries. CI builds the inputs afresh before packaging.
 
@@ -80,6 +82,19 @@ default/explicit loader locations and parsing. The original smoke/parse checks
 and the generic field/streaming suites and examples run against the installed
 archive. CI also runs the Core-owned Query
 fixtures through the installed package's original facade runner.
+
+The check then repeats the install and consumer test in a clean project outside
+the checkout. Its path contains a space and a non-ASCII character, its working
+directory is that project, and `NODE_*` and `npm_*` settings and the user's home
+are not inherited. The TypeScript checks run there, so the checkout's
+`node_modules` cannot satisfy them.
+
+[`tests/package_browser.mjs`](../tests/package_browser.mjs) serves the installed
+package from a local HTTP server and loads it in headless Chrome, as a module
+page using the documented import map and as a module worker. Each loads the WASM
+from its adjacent default and from a separate `locateFile` URL, then parses and
+encodes a Document. The result records the browser version. CI uses the Chrome
+preinstalled on the runner, so its version follows the runner image.
 
 The source checkout is a metadata/build source, not an installable package:
 generated `index.mjs`, `version.mjs` and `dist/` live only in the staging area.
@@ -100,11 +115,12 @@ to identify Core, preserving their migration contract.
 `package-info.json` includes binding identity and separate immutable Core source
 identity/output hashes. It excludes machine-specific build paths so identical
 builds can produce identical packages. Node 22 is the validated runtime; ESM is
-the only package module interface. The exact 21-file archive includes four
-`.d.mts` declarations, with `types` exports for the root, facade, Query and version
-entry points. TypeScript 5.9.3 checks both NodeNext and Bundler resolution; this
-does not establish browser/worker or bundler runtime compatibility. CommonJS
-and CDN support are not claimed.
+the only package module interface. The exact 22-file archive includes five
+`.d.mts` declarations, with `types` exports for every JavaScript entry point.
+TypeScript 5.9.3 checks both NodeNext and Bundler resolution; this does not
+establish bundler runtime compatibility. Browser and worker evidence is the
+headless Chrome check above; other browsers, bundlers, CommonJS and CDN support
+are not claimed.
 
 The package keeps `license: "MIT"` for original binding code and includes the
 root `LICENSE`, `LICENSES/MIT.txt`, `THIRD_PARTY.md` and four upstream `notices/`
@@ -194,6 +210,39 @@ symbols.
 Full CI (Debug, double build), attestations and publication were not run
 locally; they require the hosted release run on the merged commit. Local logs are
 under `build/issue32-validation/`; they are not committed release evidence.
+
+## Archive audit (#38)
+
+Audited on 2026-10-30 against an archive built by the local PR tier, then repeated
+after the fixes below. Nothing was published.
+
+| Area | Checked on the actual archive | Result |
+| --- | --- | --- |
+| Contents | `npm pack` inventory, member types, modes and timestamps, machine paths in every file | Exact allowlist, regular files, fixed timestamps, no build paths |
+| Metadata | [`publint`](https://publint.dev/) and `npm pkg fix` | `repository.url` needed correcting at publish time; fixed |
+| WASM loading | Node from a path needing URL escaping; Chrome with the adjacent default and `locateFile` | Passes |
+| ESM exports | Every export, unexported paths, `require()` | Passes; `require()` is rejected as documented and dynamic import works |
+| Declarations | [`arethetypeswrong`](https://arethetypeswrong.github.io/) and strict `tsc` | `./opentlv-core.js` had no types and failed with TS7016; fixed. The WASM asset, CommonJS and `node10` results are expected for an ESM-only package |
+| Node | Installed suites and examples on Node 22 | Passes |
+| Browser | Chrome 156 module page and module worker | Passes; other browsers and bundlers are not tested |
+| License | Notices against the Core source and Emscripten 4.0.10 upstream files | Byte-identical |
+| Provenance | `package-info.json` against the build; published `v0.1.0` assets | Core commit and output hashes match. `SHA256SUMS` verifies, and the four runtime files equal the local build |
+| Publication | Real `npm publish` against an unreachable registry | `EPRIVATE`; a regression test keeps publish commands and registry tokens out of workflows and scripts |
+
+These checks now run in every CI tier except for the external tools, the
+upstream notice comparison, the `v0.1.0` comparison and the `npm publish` refusal,
+which were one-off audit steps. The `v0.1.0` attestation was not verified here. It
+covers the earlier `opentlv-js` asset, not the renamed archive.
+
+`package-info.json` stays outside the export map; read it from the installed
+package directory. Before registry publication, #39 and #40 must:
+
+- Choose a new version, because the `v0.1.0` tag is already used.
+- Replace the packaged README's statements that the package is not on the registry
+  and its archive-based install instructions.
+- Decide whether `engines` stays at `22.x`. Other Node versions are untested and get
+  an npm warning, not a refusal.
+- Confirm organization-wide 2FA enforcement.
 
 ## Separate distribution work
 

@@ -5,12 +5,18 @@ import { loadOpenTLV, hexToBytes, packageVersion } from '@opentlv/opentlv';
 import type { Document, Node, SchemaTable, QueryAPI, Scalar } from '@opentlv/opentlv';
 import { loadOpenTLV as direct } from '@opentlv/opentlv/opentlv.mjs';
 import { queryFacade } from '@opentlv/opentlv/query.mjs';
+import createOpenTLV from '@opentlv/opentlv/opentlv-core.js';
 import { packageVersion as version } from '@opentlv/opentlv/version';
 const api = await loadOpenTLV();
 const same: typeof loadOpenTLV = direct;
 const factory: (module: unknown) => QueryAPI = queryFacade;
 const versions: string[] = [packageVersion, version];
 void same; void factory; void versions;
+const core = await createOpenTLV({ locateFile: name => name });
+const coreVersion: string = core.UTF8ToString(core._opentlv_wasm_version());
+void coreVersion; void queryFacade(core);
+// @ts-expect-error the C bridge is not a string API
+core.UTF8ToString('version');
 const document: Document = api.Document.create();
 const node: Node = document.insert(hexToBytes('5A'), hexToBytes('01'));
 const size: number = node.encodedSize();

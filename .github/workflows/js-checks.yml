@@ -84,6 +84,8 @@ jobs:
           echo "$RUNNER_TEMP/opentlv-typescript/node_modules/.bin" >> "$GITHUB_PATH"
       - name: Verify Ninja
         run: ninja --version
+      - name: Verify Chrome
+        run: google-chrome --version
       - name: Build and check the public JS/WASM boundary
         env:
           TIER: ${{ inputs.tier }}

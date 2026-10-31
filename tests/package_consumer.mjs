@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Marek Cingel
-// Copied outside the source tree and run against the installed local archive.
+// Copied into a consumer project and run against the installed local archive.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import * as entry from "@opentlv/opentlv";
 import * as facade from "@opentlv/opentlv/opentlv.mjs";
 import { queryFacade } from "@opentlv/opentlv/query.mjs";
@@ -36,5 +37,8 @@ await entry.loadOpenTLV({ locateFile(name) {
 } });
 assert.equal(located, true);
 assert.throws(() => import.meta.resolve("@opentlv/opentlv/dist/query.mjs"),
+              { code: "ERR_PACKAGE_PATH_NOT_EXPORTED" });
+// ESM is the only module interface: CommonJS needs a dynamic import.
+assert.throws(() => createRequire(import.meta.url)("@opentlv/opentlv"),
               { code: "ERR_PACKAGE_PATH_NOT_EXPORTED" });
 console.log(JSON.stringify({ packageVersion, coreVersion: api.version, exports: Object.keys(metadata.exports) }));

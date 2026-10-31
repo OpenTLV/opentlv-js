@@ -99,7 +99,7 @@ class Runner:
         # The upstream ABI checker uses assertions; optimization must not disable it.
         self.env.pop("PYTHONOPTIMIZE", None)
 
-    def run(self, name, *command, separate_stderr=False):
+    def run(self, name, *command, separate_stderr=False, cwd=ROOT, env=None):
         command = [str(value) for value in command]
         print(f"[{name}] {' '.join(command)}", flush=True)
         log = self.evidence / f"{name}.log"
@@ -107,7 +107,7 @@ class Runner:
         with ExitStack() as stack:
             stream = stack.enter_context(log.open("wb"))
             errors = stack.enter_context(error_log.open("wb")) if separate_stderr else subprocess.STDOUT
-            result = subprocess.run(command, cwd=ROOT, env=self.env,
+            result = subprocess.run(command, cwd=cwd, env=self.env if env is None else env,
                                     stdout=stream, stderr=errors, check=False)
         self.commands.append(dict(name=name, command=command, exit_code=result.returncode))
         if result.returncode:

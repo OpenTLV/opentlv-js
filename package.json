@@ -20,6 +20,7 @@
       "import": "./dist/query.mjs"
     },
     "./opentlv-core.js": {
+      "types": "./opentlv-core.d.mts",
       "import": "./dist/opentlv-core.js"
     },
     "./opentlv-core.wasm": "./dist/opentlv-core.wasm",
@@ -42,6 +43,7 @@
     "LICENSE",
     "index.d.mts",
     "version.d.mts",
+    "opentlv-core.d.mts",
     "dist/opentlv.d.mts",
     "dist/query.d.mts",
     "LICENSES/MIT.txt",
@@ -56,7 +58,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/OpenTLV/opentlv-js.git"
+    "url": "git+https://github.com/OpenTLV/opentlv-js.git"
   },
   "bugs": {
     "url": "https://github.com/OpenTLV/opentlv-js/issues"
