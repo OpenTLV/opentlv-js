@@ -268,8 +268,10 @@ node examples/parse.mjs build-wasm/dist
 ```
 
 The [CI guide](ci.md) describes Query facade, ABI and private-package checks.
-Automated runtime evidence covers Node only; web/worker loader flags do not
-establish browser or worker runtime validation.
+Runtime suites execute in Node only. Package checks also load the installed
+archive in headless Chrome as a module page and module worker, covering WASM
+loading, parsing and Document encoding; other browsers and bundlers are not
+established.
 
 ## Package version
 
@@ -894,7 +896,7 @@ finally { cases.close(); }
 Generation delegates to the canonical Core Writer and verifies byte-exact
 Reader/Writer reconstruction. Primitive contents are arbitrary bytes: this API
 does not generate Schema-valid or Codec-valid application values. Builtins
-parity, browser/worker validation and publication remain separate work.
+parity, broader browser/worker coverage and publication remain separate work.
 
 ## Scalar constraints and tag operations
 

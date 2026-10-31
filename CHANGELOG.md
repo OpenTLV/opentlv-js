@@ -9,7 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Record the npm archive audit of contents, metadata, WASM loading, ESM exports, declarations, Node and browser targets, license notices and provenance, with what publication must still change. The runtime files equal the published `v0.1.0` assets, `private: true` stays and a regression keeps npm publish commands and registry tokens out of workflows and scripts. (#38)
 - Select `@opentlv/opentlv` in the `opentlv` npm organization as the package identity, verified against the public registry, and document ownership and public access. Package imports and the release archive `opentlv-opentlv-<version>.tgz` use the new name, while the package stays `private: true` and nothing is published. The `opentlv-js` repository name and the published `v0.1.0` release asset are unchanged. (#37)
+
+### Added
+
+- Check the installed npm archive in headless Chrome, as a module page with the import map and as a module worker, and in a clean consumer outside the checkout with no inherited Node or npm settings. Package checks now require Chrome or Chromium. (#38)
+
+### Fixed
+
+- Add the missing TypeScript declaration for the `./opentlv-core.js` export, which failed strict consumers with TS7016, and use the `git+https` repository URL that npm otherwise corrects at publish time. The archive now has 22 files. (#38)
 
 ## [0.1.0] - 2026-10-28
 

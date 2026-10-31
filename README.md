@@ -153,8 +153,10 @@ python -B scripts/ci.py --tier release
 
 Each invocation requires a fresh output directory; use `--output` for a repeat
 run. CI consumes and verifies Query fixtures and ABI references from the pinned
-Core checkout. It executes Node only, matching the baseline's coverage.
-Browser/worker runtime, hosted CI and publication require separate evidence.
+Core checkout. Runtime suites execute in Node, matching the baseline's coverage;
+package checks also load the installed archive in headless Chrome as a module page
+and module worker. Other browsers, bundlers, hosted CI and publication require
+separate evidence.
 
 CI also publishes an informational [pinned Core API reference report](docs/ci.md#pinned-core-api-reference-report)
 with per-header gaps, reviewed exclusions and PR Core-pin changes. It separates

@@ -40,10 +40,12 @@ The package root exports `loadOpenTLV`, `hexToBytes`, `FORMATS`, `MODULES` and
 
 ESM is the supported module interface. There are no CommonJS entry points.
 TypeScript declarations cover the loaded API, including Document, Query and
-Schema; strict installed consumers are checked with TypeScript 5.9.3.
-The tested runtime is Node 22. The generated loader
-retains web/worker/Node flags, but this package check does not establish browser,
-worker or bundler compatibility.
+Schema, and the low-level `createOpenTLV` factory; strict installed consumers are
+checked with TypeScript 5.9.3.
+The tested runtime is Node 22. Package checks also load this archive in headless
+Chrome, as a module page with an import map and as a module worker, covering WASM
+loading, parsing and Document encoding. Other browsers and bundlers are not tested
+or claimed.
 
 The four original outputs are adjacent in `dist/`. The default loader locates
 `opentlv-core.wasm` beside `opentlv-core.js`; preserve that arrangement when

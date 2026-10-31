@@ -4,12 +4,15 @@
 
 import io
 import json
+import os
 from pathlib import Path
+import re
 import shutil
 import sys
 import tarfile
 import tempfile
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import package
@@ -23,7 +26,7 @@ class PackageTests(unittest.TestCase):
         self.source = self.root / "source"
         for name in ("package.json", "packaging/index.mjs", "packaging/README.md", *package.NOTICES, "CHANGELOG.md",
                      "src/opentlv.mjs", "src/query.mjs", "src/opentlv.d.mts", "src/query.d.mts",
-                     "packaging/index.d.mts", "packaging/version.d.mts"):
+                     "packaging/index.d.mts", "packaging/version.d.mts", "packaging/opentlv-core.d.mts"):
             target = self.source / name
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(package.ROOT / name, target)
@@ -124,6 +127,55 @@ class PackageTests(unittest.TestCase):
         self.stage()
         info = json.loads((self.root / "stage/package-info.json").read_text())
         self.assertEqual(info["name"], "@opentlv/opentlv")
+
+    def test_every_javascript_export_declares_types_and_every_declaration_is_exported(self):
+        data = package.metadata(self.source)
+        declared = set()
+        for name, target in data["exports"].items():
+            if isinstance(target, dict):
+                with self.subTest(name=name):
+                    self.assertEqual(next(iter(target)), "types")
+                    declared.add(target["types"])
+        self.assertEqual(declared, {f"./{name}" for name in package.DECLARATIONS})
+        self.stage()
+        self.assertIn("createOpenTLV", (self.root / "stage/opentlv-core.d.mts").read_text())
+
+    def test_repository_url_needs_no_npm_correction(self):
+        self.assertEqual(package.metadata(self.source)["repository"]["url"],
+                         "git+https://github.com/OpenTLV/opentlv-js.git")
+        self.edit_metadata(repository={"type": "git", "url": "https://github.com/OpenTLV/opentlv-js.git"})
+        with self.assertRaisesRegex(ValueError, "repository"):
+            package.metadata(self.source)
+
+    def test_clean_consumer_environment_drops_inherited_node_and_npm_settings(self):
+        clean = package.clean_environment({"PATH": "/bin", "NODE_PATH": "/leak", "NODE_OPTIONS": "--require=/leak",
+                                           "npm_config_registry": "http://leak", "NPM_TOKEN": "leak",
+                                           "HOME": "/leak"}, "/clean")
+        self.assertEqual(clean, {"PATH": "/bin", "HOME": "/clean", "npm_config_update_notifier": "false"})
+
+    def test_browser_is_explicit_or_found_on_path(self):
+        with patch.dict(os.environ, {"OPENTLV_BROWSER": "/custom/chrome"}):
+            self.assertEqual(package.find_browser(), "/custom/chrome")
+        with patch.dict(os.environ):
+            os.environ.pop("OPENTLV_BROWSER", None)
+            with patch.object(package.shutil, "which", side_effect=lambda name: f"/bin/{name}" if name == "chromium" else None):
+                self.assertEqual(package.find_browser(), "/bin/chromium")
+            with patch.object(package.shutil, "which", return_value=None):
+                self.assertIsNone(package.find_browser())
+
+    def test_no_workflow_or_script_can_publish_to_npm(self):
+        # Registry publication needs the separately approved change in #39.
+        forbidden = re.compile(r"npm\W+publish|NODE_AUTH_TOKEN|NPM_TOKEN|registry\.npmjs\.org", re.IGNORECASE)
+        paths = [*(package.ROOT / ".github/workflows").glob("*.yml"), *(package.ROOT / "scripts").glob("*.py")]
+        self.assertTrue(paths)
+        for path in paths:
+            with self.subTest(path=path.name):
+                self.assertIsNone(forbidden.search(path.read_text(encoding="utf-8")))
+
+    def test_ci_provides_the_browser_for_package_checks(self):
+        workflow = (package.ROOT / ".github/workflows/js-checks.yml").read_text(encoding="utf-8")
+        self.assertIn("run: google-chrome --version", workflow)
+        self.assertIn("google-chrome", package.BROWSERS)
 
     def test_publishable_or_inaccurate_metadata_fails(self):
         for change in ({"private": False}, {"name": "opentlv-js"}, {"name": "@opentlv/js"}, {"exports": {}},

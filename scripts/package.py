@@ -5,12 +5,14 @@
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import shutil
 import subprocess
 import sys
 import tarfile
+import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 NAME = "@opentlv/opentlv"
@@ -21,17 +23,19 @@ EXPORTS = {
     ".": {"types": "./index.d.mts", "import": "./index.mjs"},
     "./opentlv.mjs": {"types": "./dist/opentlv.d.mts", "import": "./dist/opentlv.mjs"},
     "./query.mjs": {"types": "./dist/query.d.mts", "import": "./dist/query.mjs"},
-    "./opentlv-core.js": {"import": "./dist/opentlv-core.js"},
+    "./opentlv-core.js": {"types": "./opentlv-core.d.mts", "import": "./dist/opentlv-core.js"},
     "./opentlv-core.wasm": "./dist/opentlv-core.wasm",
     "./version": {"types": "./version.d.mts", "import": "./version.mjs"},
     "./package.json": "./package.json",
 }
-DECLARATIONS = ("index.d.mts", "version.d.mts", "dist/opentlv.d.mts", "dist/query.d.mts")
+DECLARATIONS = ("index.d.mts", "version.d.mts", "opentlv-core.d.mts", "dist/opentlv.d.mts", "dist/query.d.mts")
 NOTICES = ("LICENSE", "LICENSES/MIT.txt", "THIRD_PARTY.md",
            "notices/core-LICENSE.txt", "notices/emscripten-LICENSE.txt",
            "notices/musl-COPYRIGHT.txt", "notices/compiler-rt-LICENSE.txt")
 FILES = {*DECLARATIONS, "package.json", "index.mjs", "version.mjs", "package-info.json",
          "README.md", "CHANGELOG.md", *NOTICES, *(f"dist/{name}" for name in OUTPUTS)}
+REPOSITORY = {"type": "git", "url": "git+https://github.com/OpenTLV/opentlv-js.git"}
+BROWSERS = ("google-chrome", "chromium", "chromium-browser")
 # SemVer numeric prerelease identifiers must not have leading zeroes.
 NUMBER = r"(?:0|[1-9][0-9]*)"
 IDENTIFIER = rf"(?:{NUMBER}|[0-9]*[A-Za-z-][0-9A-Za-z-]*)"
@@ -64,6 +68,8 @@ def metadata(root=ROOT):
         raise ValueError("Package license or tested Node version differs")
     if data.get("types") != "./index.d.mts":
         raise ValueError("Package type entry differs")
+    if data.get("repository") != REPOSITORY:
+        raise ValueError("Package repository must be the URL npm records without correcting it")
     forbidden = {"scripts", "dependencies", "devDependencies", "optionalDependencies",
                  "peerDependencies", "bundledDependencies", "bundleDependencies",
                  "publishConfig", "workspaces", "typings", "bin"}
@@ -136,6 +142,53 @@ def verify_archive(archive, expected):
                 raise ValueError(f"Archive content differs: {member.name}")
 
 
+def find_browser():
+    return os.environ.get("OPENTLV_BROWSER") or next(filter(None, map(shutil.which, BROWSERS)), None)
+
+
+def clean_environment(env, home):
+    """Drop inherited Node/npm settings so a consumer depends only on the archive."""
+    clean = {key: value for key, value in env.items() if not key.upper().startswith(("NODE_", "NPM_"))}
+    clean.update(HOME=str(home), npm_config_update_notifier="false")
+    return clean
+
+
+def install_consumer(runner, prefix, npm, archive, consumer, hashes, common, **options):
+    (consumer / "package.json").write_text('{"private":true,"type":"module"}\n', encoding="utf-8")
+    runner.run(f"{prefix}install", npm, "install", "--prefix", consumer, archive, *common,
+               "--no-audit", "--no-fund", "--package-lock=false", **options)
+    installed = consumer / "node_modules" / NAME
+    for name, expected in hashes.items():
+        if digest(read_file(installed / name)) != expected:
+            raise ValueError(f"Installed package differs: {name}")
+    shutil.copyfile(ROOT / "tests/package_consumer.mjs", consumer / "check.mjs")
+    runner.run(f"{prefix}consumer", "node", consumer / "check.mjs", **options)
+    return installed
+
+
+def check_clean_consumer(runner, npm, archive, hashes, common):
+    """Use the archive outside the checkout, from a path that needs URL escaping."""
+    with tempfile.TemporaryDirectory(prefix="opentlv clean consumer \u00e9 ") as temporary:
+        consumer = Path(temporary).resolve() / "project"
+        if ROOT in consumer.parents:
+            raise ValueError("The clean consumer must be outside the source checkout")
+        home = consumer.parent / "home"
+        consumer.mkdir()
+        home.mkdir()
+        options = dict(cwd=consumer, env=clean_environment(runner.env, home))
+        install_consumer(runner, "clean-", npm, archive, consumer, hashes, common, **options)
+        tsc = shutil.which("tsc")
+        if tsc is None:
+            raise ValueError("TypeScript 5.9.3 tsc is required for installed-package checks")
+        if runner.run("typescript-version", tsc, "--version").strip() != "Version 5.9.3":
+            raise ValueError("Installed-package type checks require TypeScript 5.9.3")
+        shutil.copyfile(ROOT / "tests/types.mts", consumer / "types.mts")
+        # Without the DOM library, as for a Node or worker project.
+        for mode, resolution in (("NodeNext", "NodeNext"), ("ESNext", "Bundler")):
+            runner.run(f"types-{resolution}", tsc, "--strict", "--noEmit", "--target", "ES2022", "--lib", "ES2022",
+                       "--module", mode, "--moduleResolution", resolution, consumer / "types.mts", **options)
+
+
 def check(build, output):
     # Reuse the same live pinned-source verification as the CI build runner.
     import ci
@@ -173,15 +226,7 @@ def check(build, output):
         verify_archive(archive, hashes)
         consumer = output / "consumer"
         consumer.mkdir()
-        (consumer / "package.json").write_text('{"private":true,"type":"module"}\n', encoding="utf-8")
-        runner.run("install", npm, "install", "--prefix", consumer, archive, *common,
-                   "--no-audit", "--no-fund", "--package-lock=false")
-        installed = consumer / "node_modules" / NAME
-        for name, expected in hashes.items():
-            if digest(read_file(installed / name)) != expected:
-                raise ValueError(f"Installed package differs: {name}")
-        shutil.copyfile(ROOT / "tests/package_consumer.mjs", consumer / "check.mjs")
-        runner.run("consumer", "node", consumer / "check.mjs")
+        installed = install_consumer(runner, "", npm, archive, consumer, hashes, common)
         runner.run("installed-smoke", "node", ROOT / "tests/smoke.mjs", installed / "dist")
         runner.run("installed-example", "node", ROOT / "examples/parse.mjs", installed / "dist")
         runner.run("installed-fields", "node", ROOT / "tests/format_fields.mjs", installed / "dist")
@@ -193,15 +238,13 @@ def check(build, output):
         runner.run("installed-codecs-generator", "node", ROOT / "tests/codecs_generator.mjs", installed / "dist")
         runner.run("installed-generic", "node", ROOT / "tests/generic.mjs", installed / "dist")
         runner.run("installed-codecs-generator-example", "node", ROOT / "examples/codecs_generator.mjs", installed / "dist")
-        tsc = shutil.which("tsc")
-        if tsc is None:
-            raise ValueError("TypeScript 5.9.3 tsc is required for installed-package checks")
-        if runner.run("typescript-version", tsc, "--version").strip() != "Version 5.9.3":
-            raise ValueError("Installed-package type checks require TypeScript 5.9.3")
-        shutil.copyfile(ROOT / "tests/types.mts", consumer / "types.mts")
-        for mode, resolution in (("NodeNext", "NodeNext"), ("ESNext", "Bundler")):
-            runner.run(f"types-{resolution}", tsc, "--strict", "--noEmit", "--target", "ES2022",
-                       "--module", mode, "--moduleResolution", resolution, consumer / "types.mts")
+        check_clean_consumer(runner, npm, archive, hashes, common)
+        browser = find_browser()
+        if browser is None:
+            raise ValueError(f"Set OPENTLV_BROWSER or install one of {', '.join(BROWSERS)} for installed-package checks")
+        observed = runner.run("installed-browser", "node", ROOT / "tests/package_browser.mjs", installed, browser,
+                              separate_stderr=True)
+        report["browser"] = json.loads(observed)["userAgent"]
         if ci.read_selection(build) != selection:
             raise ValueError("Core selection changed during package checks")
         report.update(status="passed", version=metadata()["version"], files=hashes,

@@ -189,12 +189,16 @@ public WASM interoperability layout; it does not duplicate native Core tests
 or copy fixture, oracle or ABI snapshot ownership into JS.
 
 The generated module retains `web,worker,node` loader support. As in the
-immutable migration baseline, these workflows execute **Node only**. Browser
-and worker runtime validation are not established by this CI.
+immutable migration baseline, the runtime suites execute in **Node only**. The
+[private package checks](packaging.md#build-and-check) additionally load the
+installed archive in the runner's headless Chrome, as a module page and a module
+worker, which covers WASM loading, parsing and Document encoding, not the full
+API. Other browsers and bundlers are not established by this CI.
 
 ## Local execution
 
-Activate Emscripten 4.0.10 and put Node 22 first on `PATH`, then run:
+Activate Emscripten 4.0.10, put Node 22 first on `PATH` and provide TypeScript
+5.9.3 and Chrome ([details](packaging.md#build-and-check)), then run:
 
 ```sh
 python -B scripts/verify_migration.py
@@ -222,7 +226,8 @@ A mismatch in any one fails the run. Main and Full do not implicitly prove
 reproducibility; only the double-build check does. Each build also runs the
 [private package checks](packaging.md): offline dry-run/real packing, exact
 archive content checks, offline installation, package exports/version/asset
-tests and the existing smoke/example/Query facade against the installed files.
+tests and the existing smoke/example/Query facade against the installed files,
+plus a clean consumer outside the checkout and the headless Chrome check.
 The double-build tier additionally requires identical archive bytes, package
 metadata and file hashes. Node's bundled npm is required and its version is
 recorded in each package report.
