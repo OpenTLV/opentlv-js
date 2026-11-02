@@ -16,6 +16,7 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import core_dependency as core  # noqa: E402
+import publish_npm  # noqa: E402
 import release  # noqa: E402
 
 IDENTITY = {"repository": release.REPOSITORY, "commit": "a" * 40, "dirty": False,
@@ -329,6 +330,58 @@ class Workflow(unittest.TestCase):
         self.assertLess(text.index("actions/attest-build-provenance@v3"), text.index("  publish:"))
         for command in ("prepare", "assemble", "publish"):
             self.assertIn(f"run: python3 -B scripts/release.py {command}\n", text)
+
+    def test_npm_follows_the_github_release_behind_the_approved_environment(self):
+        text = workflow("js-release.yml")
+        self.assertIn("      npm:\n        description:", text)
+        self.assertIn("        type: boolean\n        default: false\n", text)
+        self.assertIn("          NPM_PUBLISH: ${{ inputs.npm }}\n", text)
+        job = text[text.index("  npm:\n    name:"):]
+        self.assertIn("    needs: [prepare, publish]\n    if: inputs.npm\n", job)
+        self.assertIn("    environment:\n      name: npm\n", job)
+        self.assertIn("      id-token: write\n", job)
+        self.assertNotIn("contents: write", job)
+        self.assertEqual(text.count("id-token: write"), 2)
+        self.assertIn(f"npm@{publish_npm.NPM_CLI}\n", job)
+        self.assertNotIn("registry-url", job)
+        steps = [job.index(marker) for marker in (
+            "run: python3 -B scripts/publish_npm.py prepare\n",
+            "if: steps.prepare.outputs.upload == 'true'",
+            '          npm publish "./$ARCHIVE" --access public --provenance --tag latest --ignore-scripts\n',
+            "run: python3 -B scripts/publish_npm.py confirm\n")]
+        self.assertEqual(steps, sorted(steps))
+        self.assertIn("pattern: js-release-*\n", job)
+        self.assertIn("pattern: js-published-*\n", job)
+
+    def test_npm_request_is_recorded_and_revalidated(self):
+        for value, expected in (("true", True), ("false", False)):
+            with mock.patch.dict(os.environ, {"NPM_PUBLISH": value}):
+                self.assertIs(release.npm_requested(), expected)
+        with mock.patch.dict(os.environ, {"NPM_PUBLISH": "yes"}), self.assertRaises(ValueError):
+            release.npm_requested()
+        with mock.patch.object(release, "preflight", return_value={"tag": "v0.1.0", "npm": None}) as preflight:
+            release.validate_request({"tag": "v0.1.0", "npm": None})
+            preflight.assert_called_once_with("v0.1.0", False)
+        registry = {"package": "@opentlv/opentlv", "environment": "npm", "latest": None}
+        with mock.patch.object(release, "preflight", return_value={"tag": "v0.1.0", "npm": registry}) as preflight:
+            release.validate_request({"tag": "v0.1.0", "npm": registry})
+            preflight.assert_called_once_with("v0.1.0", True)
+            with self.assertRaisesRegex(ValueError, "changed"):
+                release.validate_request({"tag": "v0.1.0", "npm": None})
+
+    def test_private_package_cannot_request_npm_before_full_ci(self):
+        self.assertTrue(json.loads((release.ROOT / "package.json").read_text(encoding="utf-8"))["private"])
+        with mock.patch.object(release, "version_for", return_value="0.1.0"), \
+                mock.patch.object(release, "hosted_identity", return_value=IDENTITY), \
+                mock.patch.object(release, "unused_tag"), mock.patch.object(release, "check_gates"), \
+                mock.patch.object(release, "main_evidence", return_value={"run_id": 1, "run_attempt": 1}), \
+                mock.patch.object(publish_npm, "check_environment") as environment, \
+                mock.patch.object(publish_npm, "registry") as registry:
+            self.assertIsNone(release.preflight("v0.1.0")["npm"])
+            with self.assertRaisesRegex(ValueError, "private"):
+                release.preflight("v0.1.0", True)
+            environment.assert_not_called()
+            registry.assert_not_called()
 
     def test_full_includes_double_build_and_uploads_the_tested_archive(self):
         full = workflow("js-full.yml")

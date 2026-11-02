@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add optional npm publication to the `JS Release` workflow (`npm: true`). After the GitHub release of the same run, a job in the protected `npm` environment (required reviewer, `main` only, no administrator bypass) publishes the attested release archive, without rebuilding it, through npm trusted publishing with no registry token. It rechecks the Full evidence, checksums, attestations, the public release and the recorded approval, refuses versions that npm already has with other bytes or that are not newer than `latest`, and confirms the registry integrity, the SLSA provenance of this workflow, commit and run, and `npm audit signatures` from a clean install. Preflight rejects the request before Full CI while the package is `private: true`, so nothing can be published until the approved publication change. The first version and the trusted publisher setup are documented as manual steps. (#39)
 - Check the installed npm archive in headless Chrome, as a module page with the import map and as a module worker, and in a clean consumer outside the checkout with no inherited Node or npm settings. Package checks now require Chrome or Chromium. (#38)
 
 ### Fixed
