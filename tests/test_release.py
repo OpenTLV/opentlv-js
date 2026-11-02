@@ -29,23 +29,23 @@ def workflow(name):
 
 
 class Preflight(unittest.TestCase):
-    def test_version_and_notes_match_the_first_release(self):
-        self.assertEqual(release.version_for("v0.1.0"), "0.1.0")
-        for tag in ("", "v0.8.0", "0.1.0", "V0.1.0", "v0.1", "v0.1.0-dev.0", "v00.1.0", " v0.1.0",
+    def test_version_and_notes_match_the_release(self):
+        self.assertEqual(release.version_for("v0.2.0"), "0.2.0")
+        for tag in ("", "v0.8.0", "0.1.0", "V0.1.0", "v0.1", "v0.1.0-dev.0", "v00.1.0", " v0.2.0", "v0.1.0",
                     "../main"):
             with self.subTest(tag=tag), self.assertRaises(ValueError):
                 release.version_for(tag)
 
     def test_release_requires_a_closed_changelog_section(self):
         changelog = (release.ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
-        for text in (changelog.replace("## [0.1.0] - 2026-10-28", "## [Unreleased]"),
-                     changelog.replace("## [0.1.0] - 2026-10-28", "## [0.1.0]")):
+        for text in (changelog.replace("## [0.2.0] - 2026-11-02", "## [Unreleased]"),
+                     changelog.replace("## [0.2.0] - 2026-11-02", "## [0.2.0]")):
             original = Path.read_text
             with self.subTest(text=text[:200]), \
                     mock.patch.object(Path, "read_text", lambda self, *args, **kwargs: text
                                       if self.name == "CHANGELOG.md" else original(self, *args, **kwargs)), \
                     self.assertRaisesRegex(ValueError, "changelog"):
-                release.version_for("v0.1.0")
+                release.version_for("v0.2.0")
 
     def test_core_lock_must_be_the_exact_release_commit(self):
         lock = core.load_lock()
@@ -370,8 +370,9 @@ class Workflow(unittest.TestCase):
                 release.validate_request({"tag": "v0.1.0", "npm": None})
 
     def test_private_package_cannot_request_npm_before_full_ci(self):
-        self.assertTrue(json.loads((release.ROOT / "package.json").read_text(encoding="utf-8"))["private"])
+        private = {**json.loads((release.ROOT / "package.json").read_text(encoding="utf-8")), "private": True}
         with mock.patch.object(release, "version_for", return_value="0.1.0"), \
+                mock.patch.object(publish_npm.package, "metadata", return_value=private), \
                 mock.patch.object(release, "hosted_identity", return_value=IDENTITY), \
                 mock.patch.object(release, "unused_tag"), mock.patch.object(release, "check_gates"), \
                 mock.patch.object(release, "main_evidence", return_value={"run_id": 1, "run_attempt": 1}), \

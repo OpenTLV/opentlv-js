@@ -1,8 +1,8 @@
-# Private JS/WASM package preparation
+# JS/WASM package preparation and publication
 
 The canonical [package.json](../package.json) defines the independent
 `@opentlv/opentlv` version. The first standalone release is `0.1.0` (#32), prepared
-against Core `v0.8.0`. The earlier `0.1.0-dev.0` was an unreleased development
+against Core `v0.8.0`; `0.2.0` is the first npm registry version (#40). The earlier `0.1.0-dev.0` was an unreleased development
 identity, not a previous JS release; there were no JS repository tags or GitHub
 releases when checked on 2026-10-28. The JS version is not the pinned Core
 version: change it explicitly when advancing the binding; a Core pin change
@@ -15,12 +15,15 @@ Release tags are `vMAJOR.MINOR.PATCH` and must equal `v` plus the
 [ci/release-notes.md](../ci/release-notes.md). Prerelease tags and npm
 dist-tags are not used.
 
-`private: true` makes npm refuse publication, as described in the
+The approved publication change (#40) removed `private: true`, which makes npm
+refuse publication, as described in the
 [npm package metadata contract](https://docs.npmjs.com/cli/v10/configuring-npm/package-json/#private).
-The [GitHub release](#github-release) workflow attaches the tested archive to a
+Package checks now reject any `private` field. The
+[GitHub release](#github-release) workflow attaches the tested archive to a
 GitHub release. Its optional [npm publication](#npm-publication) publishes that
-same archive after an explicit approval, and rejects the request while the
-package is private. No registry credential or lifecycle hook is added.
+same archive after an explicit approval, and
+[verification](#verify-a-published-version) checks a published version against
+it. No registry credential or lifecycle hook is added.
 
 ## Package identity
 
@@ -34,11 +37,14 @@ The package is `@opentlv/opentlv`, selected in #37 and checked on 2026-10-30:
 | Access | Public once published | Scoped packages need an [explicit `--access public`](https://docs.npmjs.com/creating-and-publishing-scoped-public-packages/) |
 
 The scope limits who can publish, while the package name is created only by its
-first publication. Selecting the name therefore publishes nothing and changes no
-access: `private: true` stays until the separately approved publication.
-The release workflow passes `--access public` on the command line (#39), so
-`publishConfig` remains rejected. Whether the organization enforces 2FA for all members still has
-to be confirmed in its npm settings; it is not visible from the public registry.
+first publication. Selecting the name therefore published nothing and changed no
+access: `private: true` stayed until the approved publication change (#40); on
+2026-11-02 the registry still returned `404` for the package. The release
+workflow and the manual first version pass `--access public` on the command line
+(#39), so `publishConfig` remains rejected. Whether the organization enforces 2FA
+for all members still has to be confirmed in its npm settings
+([setup step 5](#setup-and-first-version)); it is not visible from the public
+registry.
 
 `opentlv-js` remains the name of the repository, its CMake targets and the
 migration owner. Imports use `@opentlv/opentlv`, and `npm pack` names the archive
@@ -132,7 +138,7 @@ their exact bytes. Keep notices with copied runtime assets. See
 [dependency attribution](../THIRD_PARTY.md) before changing Core or toolchains.
 
 All [CI tiers](ci.md) run package checks. The double-build tier in Full CI also
-compares the complete private archive hash, metadata and file hashes across two
+compares the complete archive hash, metadata and file hashes across two
 independent builds and uploads the first build's archive as
 `js-package-<attempt>`. Package reports keep `published` and `release_verified`
 false: they are build results. A passing local run does not establish hosted CI
@@ -181,8 +187,9 @@ release attempt. No workflow has a tag-push trigger, so creating or pushing a
 tag cannot run checks or publish outside this gated workflow; a regression test
 enforces this for every workflow.
 
-Install a downloaded release archive after checking it against `SHA256SUMS`
-and its attestation:
+Since `0.2.0`, install the package from npm with `npm install @opentlv/opentlv`.
+To use a downloaded release archive instead, check it against `SHA256SUMS` and
+its attestation first:
 
 ```sh
 gh attestation verify opentlv-opentlv-<version>.tgz --repo OpenTLV/opentlv-js
@@ -190,7 +197,8 @@ npm install ./opentlv-opentlv-<version>.tgz
 ```
 
 The archive contains the four runtime files, so consumers do not need
-Emscripten or Core. `packageVersion` reports `0.1.0`; the existing
+Emscripten or Core. `packageVersion` reports the package version, for example
+`0.2.0`; the existing
 `(await loadOpenTLV()).version` reports the embedded Core `0.8.0`.
 
 ### Local preparation evidence (2026-10-28)
@@ -235,14 +243,17 @@ which were one-off audit steps. The `v0.1.0` attestation was not verified here. 
 covers the earlier `opentlv-js` asset, not the renamed archive.
 
 `package-info.json` stays outside the export map; read it from the installed
-package directory. Before registry publication, #39 and #40 must:
+package directory. The audit listed what registry publication still had to
+change; #40 resolves it as follows:
 
-- Choose a new version, because the `v0.1.0` tag is already used.
-- Replace the packaged README's statements that the package is not on the registry
-  and its archive-based install instructions.
-- Decide whether `engines` stays at `22.x`. Other Node versions are untested and get
-  an npm warning, not a refusal.
-- Confirm organization-wide 2FA enforcement.
+- Version: `0.2.0`, because the `v0.1.0` tag is already used and, under 0.x
+  SemVer, the import rename from `opentlv-js` is a breaking change.
+- The packaged README installs from npm instead of the archive and no longer says
+  that the package is not on the registry.
+- `engines` stays at `22.x`, the only tested Node version. Other versions get an
+  npm warning, not a refusal.
+- Organization-wide 2FA enforcement is confirmed by the maintainer in
+  [setup step 5](#setup-and-first-version); the public registry does not show it.
 
 ## npm publication
 
@@ -261,10 +272,10 @@ Main, Full and manual Full runs cannot publish.
 
 Preflight rejects `npm: true` before Full CI starts if `package.json` still has
 `private: true`, the environment lacks any of its protections, the package does not
-exist on npm yet, or the version is not newer than npm's `latest`. Until the
-approved publication change removes `private: true`, every npm request therefore
-fails. The request records the npm state it saw, so assembly and GitHub
-publication fail if that state changes.
+exist on npm yet, or the version is not newer than npm's `latest`. #40 removed
+`private: true`; until the first version exists on npm, an npm request still fails
+and names the [manual first version](#setup-and-first-version). The request records
+the npm state it saw, so assembly and GitHub publication fail if that state changes.
 
 After the GitHub release is public, the `npm` job waits for approval. The approved
 job then:
@@ -305,15 +316,20 @@ later versions use the workflow:
    reviewer, disallow administrator bypass, limit deployment branches to the
    single branch rule `main`, and add no secrets or variables.
 2. In the approved publication change, remove `private: true`, choose a new
-   version and update the packaged README.
-3. Dispatch `JS Release` with `npm: false`. After it publishes the GitHub release,
-   download its assets and run `sha256sum -c SHA256SUMS` and
-   `gh attestation verify opentlv-opentlv-<version>.tgz --repo OpenTLV/opentlv-js`.
+   version and update the packaged README. #40 did this for `0.2.0`.
+3. After merging it and a successful JS Main CI on that commit, dispatch
+   `JS Release` on `main` with `tag: v0.2.0` and `npm: false`. After it publishes
+   the GitHub release, download its assets and run `sha256sum -c SHA256SUMS` and
+   `gh attestation verify opentlv-opentlv-0.2.0.tgz --repo OpenTLV/opentlv-js`.
    Then publish the archive from an npm account with 2FA:
-   `npm publish ./opentlv-opentlv-<version>.tgz --access public`. This version has
+   `npm publish ./opentlv-opentlv-0.2.0.tgz --access public`. This version has
    the GitHub attestation but no npm provenance.
-4. Check that `npm view @opentlv/opentlv@<version> dist.integrity` equals the
-   archive's SHA-512 as `sha512-<base64>`.
+4. Check that `npm view @opentlv/opentlv@0.2.0 dist.integrity` equals the
+   archive's SHA-512 as `sha512-<base64>`, then
+   [verify the published version](#verify-a-published-version) with
+   `--unattested` and record its `verification.json` in
+   [#40](https://github.com/OpenTLV/opentlv-js/issues/40) and
+   [#36](https://github.com/OpenTLV/opentlv-js/issues/36).
 5. In the package settings on npmjs.com, add a GitHub Actions trusted publisher
    for `OpenTLV/opentlv-js`, workflow `js-release.yml` and environment `npm`, and
    allow `npm publish`: configurations created since 2026-09-03 allow only staged
@@ -321,7 +337,8 @@ later versions use the workflow:
    it shortly before the next npm release. Then select **Require two-factor
    authentication and disallow tokens** under publishing access, and confirm
    that the `opentlv` organization enforces 2FA.
-6. Dispatch later releases with `npm: true`.
+6. Dispatch later releases with `npm: true`, and verify each published version
+   without `--unattested`.
 
 npm's [staged publishing](https://docs.npmjs.com/staged-publishing) would add an
 approval on npmjs.com, but `npm stage publish` packs a directory instead of
@@ -337,7 +354,43 @@ registry are mocked. The provenance checks follow the attestation of a published
 scoped package (`@sigstore/core`). No environment was created, no trusted
 publisher was configured and nothing was published. npm documents publishing a
 prebuilt archive, but its trusted publishing documentation does not show it, so
-the first workflow publication (#40) verifies that path.
+the first workflow publication after the manual `0.2.0` verifies that path.
+
+### Verify a published version
+
+`scripts/publish_npm.py verify` (#40) checks a version that is already on npm,
+however it was published, against its public GitHub release. It needs network
+access, Node 22 with npm, TypeScript 5.9.3 (`tsc`) and Chrome or Chromium as for
+the [package checks](#build-and-check), but no token, build or Core checkout:
+
+```sh
+python -B scripts/publish_npm.py verify 0.2.0 --unattested --output build/npm-verify-0.2.0
+```
+
+1. It downloads the assets of the public GitHub release `v<version>` and requires
+   the expected asset set, the size and SHA-256 that GitHub records for each,
+   matching `SHA256SUMS`, a manifest for this tag, version and notes, a tag on the
+   released commit, and the archive SHA-256 and file hashes that Full CI tested.
+   The attestations are still checked with `gh attestation verify`.
+2. npm must serve the version under `@opentlv/opentlv` with the archive's SHA-512
+   integrity and SHA-1, this repository and no `private` field, and `latest` must
+   not be older.
+3. If npm lists provenance, it must name the archive, `js-release.yml` on `main`,
+   the released commit and the release run. A version without provenance fails
+   unless `--unattested` is given, and `--unattested` is rejected before any
+   download for every version except `0.2.0`, the manual first version
+   (`UNATTESTED` in the script). Later versions without provenance always fail.
+4. It installs the version from the registry into a clean consumer outside the
+   checkout, without inherited Node or npm settings and with a fresh cache. Every
+   installed file must equal the tested archive. The consumer check, strict
+   TypeScript NodeNext and Bundler checks, the installed Node suites and examples
+   and headless Chrome then run against that installation.
+5. A second clean install records the lockfile integrity and runs
+   `npm audit signatures`.
+
+It writes `verification.json` with the npm and GitHub release URLs, commit,
+release run, integrity, provenance, toolchain and browser, and the logs of every
+command, to the fresh output directory. It publishes and changes nothing.
 
 ## Separate distribution work
 

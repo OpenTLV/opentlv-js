@@ -267,7 +267,7 @@ BER document and checks its four elements:
 node examples/parse.mjs build-wasm/dist
 ```
 
-The [CI guide](ci.md) describes Query facade, ABI and private-package checks.
+The [CI guide](ci.md) describes Query facade, ABI and package checks.
 Runtime suites execute in Node only. Package checks also load the installed
 archive in headless Chrome as a module page and module worker, covering WASM
 loading, parsing and Document encoding; other browsers and bundlers are not
@@ -276,7 +276,7 @@ established.
 ## Package version
 
 The independent JS package version comes from [package.json](../package.json).
-The [private package guide](packaging.md) documents `packageVersion` and
+The [package guide](packaging.md) documents `packageVersion` and
 `@opentlv/opentlv/version`. The existing `(await loadOpenTLV()).version` identifies the
 embedded Core, not the JS package. The example catalog records the JS version;
 a documentation pin does not establish compatibility with the portal's Core pin.
@@ -285,7 +285,7 @@ a documentation pin does not establish compatibility with the portal's Core pin.
 
 This repository owns WASM, JavaScript and TypeScript integration, including the
 private native adapters, API documentation, examples and tests. TypeScript
-declarations are included by #5 in the checked private package. Core owns the
+declarations are included by #5 in the checked package. Core owns the
 public C execution contracts and canonical Query fixtures/ABI snapshots.
 
 ### Native adapters and capabilities
@@ -461,7 +461,7 @@ Format operations and closing a Format during its callback are rejected.
 Run `node tests/format_fields.mjs <build>/dist` or CTest for binding tests covering
 configuration copies, errors, 64-bit marshalling, packed/tag-only layouts, source
 preservation, heap growth and dependent lifetimes. The same tests and runnable
-example execute against the installed private package in CI. Builtins parity,
+example execute against the installed package in CI. Builtins parity,
 general Reader/Writer APIs and TypeScript declarations are outside #3.
 
 ## Reader, Writer and tree streams
@@ -605,7 +605,7 @@ of final capacity. No automatic callback replay occurs.
 Run `node examples/streaming.mjs <build>/dist` for an incremental event round trip.
 `tests/streaming.mjs` covers every chunk split, visitor stop/resume and errors,
 limits, prefix validation, balanced events, preservation, measurement, rollback,
-retained formats, copied results and memory growth. CTest and private-package
+retained formats, copied results and memory growth. CTest and package
 checks run these tests and the example. See the [coverage inventory](ci.md#readerwriter-inventory-4)
 for pinned symbols and equivalent C entry points. Browser/worker execution and
 TypeScript runtime integration beyond the installed consumer checks requires its own validation.
@@ -743,7 +743,7 @@ Its locations then refer to that encoding, not the original parsed input.
 
 ### TypeScript declarations
 
-The private package ships `.d.mts` declarations for the root, facade, Query and
+The package ships `.d.mts` declarations for the root, facade, Query and
 version entry points, using matching
 [ES module declarations](https://www.typescriptlang.org/docs/handbook/modules/theory.html).
 Runtime constructors are properties of the object returned by `loadOpenTLV()`;
@@ -755,7 +755,7 @@ field-composition option objects remain structurally open.
 
 The four existing runtime output names are unchanged. Two declaration files are
 also copied beside the build outputs; the checked package adds root/version
-declarations and explicit `types` exports. Install the checked private archive,
+declarations and explicit `types` exports. Install the checked archive or the npm package,
 not the source checkout. All owned objects still require explicit `close()`.
 
 ## Generic codecs and wire Generator

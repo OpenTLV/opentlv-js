@@ -50,7 +50,7 @@ coverage. The generated `version.mjs` carries the binding's MIT/author header;
 copied JS/TypeScript files retain their source notices. Do not edit generated
 binaries or prepend headers to the Emscripten loader manually.
 
-Every private npm archive includes `LICENSE`, `LICENSES/MIT.txt`, this document
+Every npm archive includes `LICENSE`, `LICENSES/MIT.txt`, this document
 and the four `notices/` files. Packaging checks require their exact source bytes
 in the staged tree, actual archive and installed consumer. Keep these notices
 with redistributed JS/WASM assets. `LICENSES/MIT.txt` is REUSE's standard text;

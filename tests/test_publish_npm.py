@@ -15,6 +15,7 @@ import unittest
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+import ci  # noqa: E402
 import package  # noqa: E402
 import publish_npm  # noqa: E402
 import release  # noqa: E402
@@ -95,13 +96,15 @@ class Gate(unittest.TestCase):
             publish_npm.check_registry("0.2.0")
 
     def test_preflight_checks_privacy_before_any_remote_state(self):
-        with mock.patch.object(publish_npm, "check_environment") as environment, \
+        public = package.metadata(package.ROOT)
+        self.assertNotIn("private", public)
+        with mock.patch.object(package, "metadata", return_value={**public, "private": True}), \
+                mock.patch.object(publish_npm, "check_environment") as environment, \
                 mock.patch.object(publish_npm, "registry") as registry, \
                 self.assertRaisesRegex(ValueError, "private"):
             publish_npm.preflight("0.2.0")
         environment.assert_not_called()
         registry.assert_not_called()
-        public = {k: v for k, v in package.metadata(package.ROOT).items() if k != "private"}
         with mock.patch.object(package, "metadata", return_value=public), \
                 mock.patch.object(publish_npm, "check_environment") as environment, \
                 mock.patch.object(publish_npm, "check_registry", return_value="0.1.0"):
@@ -295,6 +298,121 @@ class Confirm(unittest.TestCase):
                     self.assertRaisesRegex(ValueError, "does not serve"):
                 publish_npm.confirm(attempts=1)
         self.assertFalse((self.work / "receipt.json").exists())
+
+
+class Verify(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        served = self.root / "served"
+        served.mkdir()
+        path = served / "opentlv-opentlv-0.2.0.tgz"
+        archive(path)
+        with tarfile.open(path, "r:gz") as bundle:
+            files = {"package.json": package.digest(bundle.extractfile("package/package.json").read())}
+        (served / "release-notes.md").write_text("# OpenTLV JS v0.2.0\n\n- Notes\n", encoding="utf-8")
+        release.write(served / "release-manifest.json", {
+            "schema": 1, "package": {"archive_sha256": release.digest(path), "files": files},
+            "request": {"tag": "v0.2.0", "version": "0.2.0", "identity": dict(IDENTITY),
+                        "notes_sha256": release.digest(served / "release-notes.md")}})
+        (served / "SHA256SUMS").write_text("".join(
+            f"{release.digest(item)}  {item.name}\n" for item in sorted(served.iterdir())), encoding="utf-8")
+        self.github = {"draft": False, "prerelease": False,
+                       "html_url": "https://github.com/OpenTLV/opentlv-js/releases/tag/v0.2.0",
+                       "assets": [{"name": item.name, "size": item.stat().st_size,
+                                   "digest": "sha256:" + release.digest(item), "browser_download_url": item.as_uri()}
+                                  for item in sorted(served.iterdir())]}
+        self.served = served
+        self.expected = publish_npm.hashes(path)
+        self.plan = {**self.expected, "version": "0.2.0", "identity": dict(IDENTITY)}
+        self.info = {"name": package.NAME, "version": "0.2.0", "repository": package.REPOSITORY,
+                     "dist": {"integrity": self.expected["integrity"], "shasum": self.expected["shasum"]}}
+        self.replies = {"tag": self.github, "commit": {"sha": IDENTITY["commit"]}, "info": self.info,
+                        "packument": {"dist-tags": {"latest": "0.2.0"}}, "attestations": statement(self.plan)}
+        runner = mock.Mock()
+        runner.return_value.run.side_effect = lambda name, *args, **kwargs: {
+            "node-version": "v22.16.0", "npm-version": "10.9.2"}[name]
+        runner.return_value.env, runner.return_value.commands = {}, []
+        for target, name, value in ((publish_npm, "audit", mock.DEFAULT), (publish_npm, "registry", self.registry),
+                                    (package, "check_clean_consumer", mock.Mock(return_value="Chrome")),
+                                    (publish_npm.shutil, "which", mock.Mock(return_value="/bin/npm")),
+                                    (ci, "Runner", runner)):
+            patcher = mock.patch.object(target, name, value)
+            self.addCleanup(patcher.stop)
+            patcher.start()
+        self.runs = 0
+
+    def registry(self, url):
+        for suffix, key in (("/releases/tags/v0.2.0", "tag"), ("/commits/v0.2.0", "commit"), ("%2fopentlv/0.2.0", "info"),
+                            ("%2fopentlv", "packument"), ("@opentlv%2fopentlv@0.2.0", "attestations")):
+            if url.endswith(suffix):
+                return copy.deepcopy(self.replies[key])
+        raise AssertionError(url)
+
+    def verify(self, unattested=False):
+        self.runs += 1
+        return publish_npm.verify("0.2.0", self.root / f"verify-{self.runs}", unattested)
+
+    def test_manual_first_version_is_accepted_only_without_provenance_by_request(self):
+        with self.assertRaisesRegex(ValueError, "provenance"):
+            self.verify()
+        receipt = json.loads(self.verify(unattested=True).read_text())
+        self.assertIsNone(receipt["provenance"])
+        self.assertEqual((receipt["integrity"], receipt["browser"], receipt["commit"]),
+                         (self.expected["integrity"], "Chrome", IDENTITY["commit"]))
+        runner, npm, spec, files, common = package.check_clean_consumer.call_args.args
+        self.assertEqual((npm, spec), ("/bin/npm", "@opentlv/opentlv@0.2.0"))
+        self.assertEqual(files, {"package.json": mock.ANY})
+        self.assertEqual(common[common.index("--registry") + 1], publish_npm.REGISTRY + "/")
+        publish_npm.audit.assert_called_with({"version": "0.2.0", "integrity": self.expected["integrity"]})
+
+    def test_later_versions_cannot_skip_provenance(self):
+        self.assertEqual(publish_npm.UNATTESTED, "0.2.0")
+        for version in ("0.2.1", "0.3.0", "1.0.0", "0.1.0"):
+            output = self.root / f"later-{version}"
+            with self.subTest(version=version), mock.patch.object(publish_npm, "registry") as registry, \
+                    self.assertRaisesRegex(ValueError, "Only the manually published first version 0.2.0"):
+                publish_npm.verify(version, output, unattested=True)
+            registry.assert_not_called()
+            self.assertFalse(output.exists())
+
+    def test_published_provenance_must_name_the_release_run(self):
+        self.info["dist"]["attestations"] = {"url": f"{publish_npm.REGISTRY}/-/npm/v1/attestations/"
+                                                    "@opentlv%2fopentlv@0.2.0",
+                                             "provenance": {"predicateType": publish_npm.SLSA}}
+        receipt = json.loads(self.verify().read_text())
+        self.assertEqual(receipt["provenance"], "https://github.com/OpenTLV/opentlv-js/actions/runs/123/attempts/2")
+        self.replies["attestations"] = statement(self.plan, **{
+            "predicate.runDetails.metadata.invocationId":
+                "https://github.com/OpenTLV/opentlv-js/actions/runs/999/attempts/1"})
+        with self.assertRaisesRegex(ValueError, "provenance"):
+            self.verify(unattested=True)
+
+    def test_registry_or_release_differences_fail_before_installing(self):
+        for key, change, message in (
+                ("info", {"dist": {"integrity": "sha512-other", "shasum": "0" * 40}}, "bytes differ"),
+                ("info", {"private": True}, "metadata"),
+                ("info", {"repository": {"type": "git", "url": "git+https://github.com/fork/opentlv-js.git"}},
+                 "metadata"),
+                ("packument", {"dist-tags": {"latest": "0.1.0"}}, "latest"),
+                ("commit", {"sha": "b" * 40}, "commit"),
+                ("tag", {"draft": True}, "public GitHub release"),
+                ("tag", {"assets": self.github["assets"][:3]}, "asset set")):
+            original = copy.deepcopy(self.replies[key])
+            self.replies[key].update(change)
+            with self.subTest(key=key, change=change), self.assertRaisesRegex(ValueError, message):
+                self.verify(unattested=True)
+            self.replies[key] = original
+        self.replies["info"] = None
+        with self.assertRaisesRegex(ValueError, "npm has no"):
+            self.verify(unattested=True)
+        self.replies["info"] = self.info
+        (self.served / "release-notes.md").write_text("# Changed\n", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "differs: release-notes.md"):
+            self.verify(unattested=True)
+        package.check_clean_consumer.assert_not_called()
+        publish_npm.audit.assert_not_called()
 
 
 if __name__ == "__main__":

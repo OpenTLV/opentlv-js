@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "component_version": "0.1.0",
+  "component_version": "0.2.0",
   "examples": [
     {
       "feature": "ber.parse",

@@ -11,10 +11,11 @@ example are migrated from the recorded Core baseline. The standalone CMake
 build compiles the selected Core and bridge together with Emscripten, preserving
 the original JavaScript API and output names. Build adaptations are recorded in
 [MIGRATION.md](MIGRATION.md).
-The independent JS package version is `0.1.0`, the first standalone release,
-prepared against Core `v0.8.0` (#32). The tested npm archive is distributed
-through [GitHub Releases](docs/packaging.md#github-release); it is not published
-to the npm registry. The package has explicit ESM exports and TypeScript
+The independent JS package version is `0.2.0`, the first npm registry version
+(#40), built against Core `v0.8.0` like the first standalone release `0.1.0`
+(#32). The package is published on npm as `@opentlv/opentlv`, and the tested
+archive is also attached to [GitHub Releases](docs/packaging.md#github-release).
+The package has explicit ESM exports and TypeScript
 declarations checked with TypeScript 5.9.3. WASM, JavaScript and TypeScript APIs,
 private native adapters, examples and documentation belong to this repository.
 
@@ -46,7 +47,7 @@ compatibility.
 | `tests/query/` | JS facade runner consuming Core-owned fixtures |
 | `examples/` | Runnable Node parse example |
 | `cmake/` | WASM target, Core selection and immutable dependency pin |
-| `scripts/` | Migration verification, CI and private package preparation |
+| `scripts/` | Migration verification, CI, package preparation, release and npm verification |
 | `packaging/` | Package entry point and packaged README templates |
 | `docs/` | Binding build, validation and distribution documentation |
 | `migration/` | Immutable source inventory and recorded build adaptations |
@@ -64,7 +65,7 @@ node tests/smoke.mjs build-wasm/dist
 
 Package imports, relative imports within the distributed modules and WASM asset
 names are unchanged. The source checkout is not an installable package; use the
-[checked private archive](docs/packaging.md). The
+[checked archive](docs/packaging.md) or the npm package. The
 [migration map](MIGRATION.md#standalone-layout-12) relates current paths to the
 immutable Core inventory.
 
@@ -189,10 +190,10 @@ The [scalar constraint and tag API](docs/webassembly.md#scalar-constraints-and-t
 adds Core-backed decoded-value validation, named allowed values and bytewise tag
 comparison/hashing, with exact signed 64-bit inputs.
 
-## Private package and version
+## Package and version
 
-[package.json](package.json) defines the independent JS version, `0.1.0`,
-with `private: true`. After a default pinned build, put TypeScript 5.9.3 (`tsc`) on `PATH`, then run:
+[package.json](package.json) defines the independent JS version, `0.2.0`.
+After a default pinned build, put TypeScript 5.9.3 (`tsc`) on `PATH`, then run:
 
 ```sh
 python -B scripts/package.py --build build-wasm --output build/package-check
@@ -208,12 +209,14 @@ The manual `JS Release` workflow attaches the archive tested by hosted Full CI
 to a GitHub release; see [GitHub release](docs/packaging.md#github-release).
 After an explicit approval it can publish the same archive to npm through
 trusted publishing; see [npm publication](docs/packaging.md#npm-publication).
+[Verification](docs/packaging.md#verify-a-published-version) checks a published
+npm version against that release archive and uses it from a clean install.
 
 See the [packaging guide](docs/packaging.md),
 [package API/asset README](packaging/README.md) and
 [separate distribution follow-ups](docs/distribution-follow-ups.md). The package
-name `@opentlv/opentlv` is [selected for npm](docs/packaging.md#package-identity)
-but not published.
+name `@opentlv/opentlv` is described under
+[package identity](docs/packaging.md#package-identity).
 
 ## Ownership
 
