@@ -8,6 +8,10 @@ on:
         description: Unused JS tag matching package.json and ci/release-notes.md (v0.1.0)
         required: true
         type: string
+      npm:
+        description: After the GitHub release, publish its archive to npm (needs the npm environment approval)
+        type: boolean
+        default: false
 permissions:
   contents: read
   actions: read
@@ -28,6 +32,7 @@ jobs:
       - env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.tag }}
+          NPM_PUBLISH: ${{ inputs.npm }}
         run: python3 -B scripts/release.py prepare
       - uses: actions/upload-artifact@v4
         with:
@@ -95,3 +100,57 @@ jobs:
           name: js-published-${{ github.run_attempt }}
           path: build/published.json
           if-no-files-found: error
+  npm:
+    name: Publish the released archive to npm
+    needs: [prepare, publish]
+    if: inputs.npm
+    runs-on: ubuntu-24.04
+    # A reviewer must approve the protected npm environment, which deploys only from main and holds no
+    # secrets or variables. npm trusts this repository, workflow and environment through OIDC, so no
+    # registry token exists, and it publishes the attested GitHub release archive, never a new build.
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/@opentlv/opentlv
+    permissions:
+      contents: read
+      actions: read
+      attestations: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install the pinned npm CLI for trusted publishing
+        run: npm install --global --ignore-scripts --no-audit --no-fund npm@11.21.1
+      # Re-running the failed npm job keeps the assets of the attempt that published the GitHub release.
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: js-release-*
+          path: build/npm-input
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: js-published-*
+          path: build/npm-input
+      - name: Verify the released archive, approval and registry
+        id: prepare
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -B scripts/publish_npm.py prepare
+      - name: Publish through trusted publishing
+        if: steps.prepare.outputs.upload == 'true'
+        env:
+          ARCHIVE: ${{ steps.prepare.outputs.archive }}
+        run: >-
+          npm publish "./$ARCHIVE" --access public --provenance --tag latest --ignore-scripts
+          --registry https://registry.npmjs.org/
+      - name: Confirm the registry bytes, provenance and signatures
+        run: python3 -B scripts/publish_npm.py confirm
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: js-npm-${{ github.run_attempt }}
+          path: build/npm/*.json
+          if-no-files-found: ignore

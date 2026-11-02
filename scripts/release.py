@@ -150,18 +150,32 @@ def core_release(lock):
     return lock
 
 
-def preflight(tag):
+def npm_requested():
+    value = os.environ.get("NPM_PUBLISH", "false")
+    require(value in ("true", "false"), "NPM_PUBLISH must be true or false")
+    return value == "true"
+
+
+def preflight(tag, npm=False):
     version = version_for(tag)
     current = hosted_identity()
     unused_tag(tag, current["commit"])
     main = main_evidence(current["commit"])
     check_gates(main["run_id"], main["run_attempt"], MAIN_GATES)
+    registry = None
+    if npm:
+        # Imported here because publish_npm builds on this module.
+        import publish_npm
+
+        registry = publish_npm.preflight(version)
     return {"schema": 1, "tag": tag, "version": version, "identity": current,
-            "core": core_release(core.load_lock()), "main": main, "notes_sha256": digest(NOTES)}
+            "core": core_release(core.load_lock()), "main": main, "notes_sha256": digest(NOTES),
+            "npm": registry}
 
 
 def validate_request(request):
-    require(request == preflight(request["tag"]), "Release request, Main evidence or source changed")
+    require(request == preflight(request["tag"], request.get("npm") is not None),
+            "Release request, Main evidence or source changed")
 
 
 def check_record(record, tier, configuration, request):
@@ -239,11 +253,11 @@ def assemble(evidence, output):
         f"{digest(path)}  {path.name}\n" for path in sorted(output.iterdir())), encoding="utf-8")
 
 
-def verify_payload(directory):
+def verify_payload(directory, validate=None):
     manifest = read(directory / "release-manifest.json")
     require(manifest.get("schema") == 1, "Unsupported release manifest")
     request = manifest["request"]
-    validate_request(request)
+    (validate or validate_request)(request)
     require(len(manifest["records"]) == len(RECORDS), "Incomplete Full evidence")
     records = {(record.get("tier"), record.get("configuration")): record
                for record in manifest["records"]}
@@ -276,12 +290,16 @@ def verify_published_assets(release, directory, request, draft):
                 asset.get("digest") == "sha256:" + digest(path), "Published asset digest differs")
 
 
-def publish(directory):
-    request = verify_payload(directory)
-    commit = request["identity"]["commit"]
+def verify_attestations(directory, commit):
     for path in sorted(directory.iterdir()):
         run("gh", "attestation", "verify", path, "--repo", REPOSITORY,
             "--signer-workflow", SIGNER, "--source-digest", commit)
+
+
+def publish(directory):
+    request = verify_payload(directory)
+    commit = request["identity"]["commit"]
+    verify_attestations(directory, commit)
     # Final read before the first write; never overwrite an existing tag/release.
     unused_tag(request["tag"], commit)
     run("gh", "api", "--method", "POST", f"repos/{REPOSITORY}/git/refs",
@@ -314,7 +332,7 @@ def main():
     if args.command == "prepare":
         output = ROOT / "build/request.json"
         output.unlink(missing_ok=True)
-        write(output, preflight(os.environ["RELEASE_TAG"]))
+        write(output, preflight(os.environ["RELEASE_TAG"], npm_requested()))
     elif args.command == "assemble":
         assemble(ROOT / "build/evidence", ROOT / "build/release")
     else:

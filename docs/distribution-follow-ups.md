@@ -21,14 +21,17 @@ complete any publication item.
   2FA enforcement remains open.
 - Issue #32 defines release versions, `v`-prefixed tag matching and the GitHub
   release of the tested archive against the pinned Core (`v0.1.0` with Core
-  `v0.8.0`); see [GitHub release](packaging.md#github-release). Registry
-  dist-tags and prerelease policy remain open.
-- Establish authorized publishing identities, trusted publishing or credential
-  handling, protected environments and required hosted gates.
-- Bind the exact checked archive to repository commit, workflow run/attempt,
-  checksum and provenance; establish retention and verification of evidence.
-- Review package contents/license obligations and publish/install verification,
-  rollback/deprecation policy and registry account recovery.
+  `v0.8.0`); see [GitHub release](packaging.md#github-release). Prerelease
+  versions remain unsupported.
+- Issue #39 adds [npm publication](packaging.md#npm-publication) to the release
+  workflow: trusted publishing without a registry token, a protected `npm`
+  environment with required approval, the attested GitHub release archive bound
+  to its commit, Full evidence and run, and verification of registry bytes,
+  provenance and signatures. Creating the environment, the manual first version
+  and the trusted publisher configuration remain for #40. The stable-only
+  versioning means npm uses only the `latest` dist-tag.
+- Define the retention of evidence, rollback/deprecation policy and registry
+  account recovery.
 - Issue #38 records what publication still has to change; see
   [Archive audit](packaging.md#archive-audit-38).
 - Remove `private: true` only in the separately reviewed publication change.

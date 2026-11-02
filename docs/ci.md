@@ -18,7 +18,7 @@ availability without an APT update or dependency on Ubuntu package mirrors.
 | JS Pull Request CI | PR targeting `main`, without path filters | Release build, smoke, parse example, Query facade, WASM Query ABI, private package checks |
 | JS Main CI | Push to `main` | Same checks on the actual merged commit; upload outputs |
 | JS Full CI | Manual or reusable workflow call | Release and Debug, each with the same checks; separately two fresh Release builds, all checks in each, comparing all four output and private package hashes; upload outputs and the tested archive |
-| JS Release | Manual dispatch on `main` with an unused tag | Requires successful Main CI on the commit, runs Full in the same attempt, then attests and publishes the tested archive as a GitHub release |
+| JS Release | Manual dispatch on `main` with an unused tag | Requires successful Main CI on the commit, runs Full in the same attempt, then attests and publishes the tested archive as a GitHub release; with `npm: true`, publishes that archive to npm after the `npm` environment approval |
 
 Full's Release configuration and its double-build tier additionally rebuild the
 historical Core WASM target and require migration compatibility as described
@@ -43,8 +43,9 @@ The double-build runner tier keeps its name `release`
 manual Full run rehearses it without creating a tag. Tag pushes no longer
 trigger a workflow. Only the `JS Release` workflow creates a tag, after its
 gates pass, and it publishes the tested archive and attestations to GitHub
-Releases as described in [GitHub release](packaging.md#github-release). No
-workflow publishes an npm package.
+Releases as described in [GitHub release](packaging.md#github-release). Only its
+approved `npm` job publishes to npm, by trusted publishing and only that release's
+archive; see [npm publication](packaging.md#npm-publication).
 
 ## Pinned Core API reference report
 

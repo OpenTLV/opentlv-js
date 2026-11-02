@@ -206,6 +206,8 @@ The existing `(await loadOpenTLV()).version` continues to report the embedded Co
 version. Core provenance is recorded separately in `package-info.json`.
 The manual `JS Release` workflow attaches the archive tested by hosted Full CI
 to a GitHub release; see [GitHub release](docs/packaging.md#github-release).
+After an explicit approval it can publish the same archive to npm through
+trusted publishing; see [npm publication](docs/packaging.md#npm-publication).
 
 See the [packaging guide](docs/packaging.md),
 [package API/asset README](packaging/README.md) and

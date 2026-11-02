@@ -163,14 +163,24 @@ class PackageTests(unittest.TestCase):
             with patch.object(package.shutil, "which", return_value=None):
                 self.assertIsNone(package.find_browser())
 
-    def test_no_workflow_or_script_can_publish_to_npm(self):
-        # Registry publication needs the separately approved change in #39.
-        forbidden = re.compile(r"npm\W+publish|NODE_AUTH_TOKEN|NPM_TOKEN|registry\.npmjs\.org", re.IGNORECASE)
+    def test_only_the_approved_npm_job_publishes_without_tokens(self):
+        # Only the release workflow's npm job publishes, by trusted publishing, never with a stored token (#39).
+        tokens = re.compile(r"NODE_AUTH_TOKEN|NPM_TOKEN|_authToken|registry-url", re.IGNORECASE)
+        publish = re.compile(r"npm\W+(?:stage\W+)?publish|registry\.npmjs\.org", re.IGNORECASE)
         paths = [*(package.ROOT / ".github/workflows").glob("*.yml"), *(package.ROOT / "scripts").glob("*.py")]
         self.assertTrue(paths)
         for path in paths:
+            text = path.read_text(encoding="utf-8")
             with self.subTest(path=path.name):
-                self.assertIsNone(forbidden.search(path.read_text(encoding="utf-8")))
+                self.assertIsNone(tokens.search(text))
+                if path.name not in ("js-release.yml", "publish_npm.py"):
+                    self.assertIsNone(publish.search(text))
+        workflow = (package.ROOT / ".github/workflows/js-release.yml").read_text(encoding="utf-8")
+        self.assertNotIn("secrets.", workflow)
+        self.assertEqual(len(re.findall(r"npm\W+publish\b", workflow)), 1)
+        self.assertGreater(workflow.index("run: >-\n          npm publish"), workflow.index("  npm:\n"))
+        self.assertIsNone(re.search(r"npm\W+publish\b",
+                                    (package.ROOT / "scripts/publish_npm.py").read_text(encoding="utf-8")))
 
     def test_ci_provides_the_browser_for_package_checks(self):
         workflow = (package.ROOT / ".github/workflows/js-checks.yml").read_text(encoding="utf-8")

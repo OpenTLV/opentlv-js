@@ -17,9 +17,10 @@ dist-tags are not used.
 
 `private: true` makes npm refuse publication, as described in the
 [npm package metadata contract](https://docs.npmjs.com/cli/v10/configuring-npm/package-json/#private).
-No npm publish command, registry credential or lifecycle hook is added. The
-[GitHub release](#github-release) workflow attaches the tested archive to a
-GitHub release only.
+The [GitHub release](#github-release) workflow attaches the tested archive to a
+GitHub release. Its optional [npm publication](#npm-publication) publishes that
+same archive after an explicit approval, and rejects the request while the
+package is private. No registry credential or lifecycle hook is added.
 
 ## Package identity
 
@@ -35,9 +36,8 @@ The package is `@opentlv/opentlv`, selected in #37 and checked on 2026-10-30:
 The scope limits who can publish, while the package name is created only by its
 first publication. Selecting the name therefore publishes nothing and changes no
 access: `private: true` stays until the separately approved publication.
-Publishing with `--access public` belongs to
-[#39](https://github.com/OpenTLV/opentlv-js/issues/39), so `publishConfig` remains
-rejected here. Whether the organization enforces 2FA for all members still has
+The release workflow passes `--access public` on the command line (#39), so
+`publishConfig` remains rejected. Whether the organization enforces 2FA for all members still has
 to be confirmed in its npm settings; it is not visible from the public registry.
 
 `opentlv-js` remains the name of the repository, its CMake targets and the
@@ -227,7 +227,7 @@ after the fixes below. Nothing was published.
 | Browser | Chrome 156 module page and module worker | Passes; other browsers and bundlers are not tested |
 | License | Notices against the Core source and Emscripten 4.0.10 upstream files | Byte-identical |
 | Provenance | `package-info.json` against the build; published `v0.1.0` assets | Core commit and output hashes match. `SHA256SUMS` verifies, and the four runtime files equal the local build |
-| Publication | Real `npm publish` against an unreachable registry | `EPRIVATE`; a regression test keeps publish commands and registry tokens out of workflows and scripts |
+| Publication | Real `npm publish` against an unreachable registry | `EPRIVATE`; a regression test keeps registry tokens out of workflows and scripts and, since #39, allows `npm publish` only in the approved release job |
 
 These checks now run in every CI tier except for the external tools, the
 upstream notice comparison, the `v0.1.0` comparison and the `npm publish` refusal,
@@ -243,6 +243,101 @@ package directory. Before registry publication, #39 and #40 must:
 - Decide whether `engines` stays at `22.x`. Other Node versions are untested and get
   an npm warning, not a refusal.
 - Confirm organization-wide 2FA enforcement.
+
+## npm publication
+
+The `npm` input of `JS Release` (#39) publishes the GitHub release archive of the
+same run to npm as `@opentlv/opentlv`. Nothing is rebuilt: npm receives the bytes
+that Full CI reproduced and tested and that the release attested. Pull requests,
+Main, Full and manual Full runs cannot publish.
+
+| Protection | How |
+| --- | --- |
+| Explicit approval | The `npm` job uses the GitHub environment `npm`, which must require a reviewer, deploy only from `main` and not let administrators bypass it |
+| No registry token | npm [trusted publishing](https://docs.npmjs.com/trusted-publishers) accepts an OIDC token only from this repository, `js-release.yml` and the `npm` environment. Besides release attestation, only this job has `id-token: write` |
+| Immutable archive | The job publishes `opentlv-opentlv-<version>.tgz` from the release assets after rechecking the manifest, Full evidence, checksums, attestations and the public GitHub release |
+| One version, once | npm versions cannot be replaced: a version that npm already has with other bytes fails, and a new version must be newer than `latest` |
+| Provenance | npm generates SLSA provenance for trusted publishing from a public repository. The job requires it to name the archive's SHA-512, this workflow on `main`, the release commit and the run |
+
+Preflight rejects `npm: true` before Full CI starts if `package.json` still has
+`private: true`, the environment lacks any of its protections, the package does not
+exist on npm yet, or the version is not newer than npm's `latest`. Until the
+approved publication change removes `private: true`, every npm request therefore
+fails. The request records the npm state it saw, so assembly and GitHub
+publication fail if that state changes.
+
+After the GitHub release is public, the `npm` job waits for approval. The approved
+job then:
+
+1. Installs npm 11.21.1 on Node 22. Trusted publishing needs npm 11.5.1 and
+   Node 22.14 or later; npm 12 would need Node 22.22.2.
+2. Runs `scripts/publish_npm.py prepare`. It takes the release assets of the
+   attempt that published the GitHub release and verifies them as the GitHub
+   publication did: request, Full records and gates, checksums, notes and the
+   attestation of each asset. The public release and tag must hold exactly these
+   assets, the environment must keep its protections, and the run must record an
+   approval of `npm`. The archive's `package.json` must name `@opentlv/opentlv`,
+   the release version and this repository, without `private`.
+3. Runs `npm publish ./build/npm/opentlv-opentlv-<version>.tgz --access public
+   --provenance --tag latest --ignore-scripts` against `https://registry.npmjs.org/`.
+   If npm already has the version with the same SHA-512 and SHA-1, it publishes
+   nothing and only confirms.
+4. Runs `scripts/publish_npm.py confirm`. It waits until npm serves the version as
+   `latest` with the archive's integrity and provenance, and checks the provenance
+   statement. It then installs the version from the registry into a clean project,
+   compares the lockfile integrity and runs `npm audit signatures`.
+5. Uploads `js-npm-<attempt>` with `plan.json` and `receipt.json`. The receipt
+   names the npm URL, GitHub release, commit, run, integrity, provenance run and
+   the approving reviewers.
+
+If the approval is rejected or the npm job fails, use **Re-run failed jobs**. The
+GitHub release and its tag remain, so a new dispatch of the same tag fails. The
+re-run downloads the earlier attempt's assets, verifies them again and asks for
+approval again.
+
+### Setup and first version
+
+npm can configure trusted publishing only for an existing package. The maintainer
+therefore publishes the first version once, from the attested release asset;
+later versions use the workflow:
+
+1. In the repository settings, create the environment `npm`: add a required
+   reviewer, disallow administrator bypass, limit deployment branches to the
+   single branch rule `main`, and add no secrets or variables.
+2. In the approved publication change, remove `private: true`, choose a new
+   version and update the packaged README.
+3. Dispatch `JS Release` with `npm: false`. After it publishes the GitHub release,
+   download its assets and run `sha256sum -c SHA256SUMS` and
+   `gh attestation verify opentlv-opentlv-<version>.tgz --repo OpenTLV/opentlv-js`.
+   Then publish the archive from an npm account with 2FA:
+   `npm publish ./opentlv-opentlv-<version>.tgz --access public`. This version has
+   the GitHub attestation but no npm provenance.
+4. Check that `npm view @opentlv/opentlv@<version> dist.integrity` equals the
+   archive's SHA-512 as `sha512-<base64>`.
+5. In the package settings on npmjs.com, add a GitHub Actions trusted publisher
+   for `OpenTLV/opentlv-js`, workflow `js-release.yml` and environment `npm`, and
+   allow `npm publish`: configurations created since 2026-09-03 allow only staged
+   publishing by default. An unused configuration expires after two days, so add
+   it shortly before the next npm release. Then select **Require two-factor
+   authentication and disallow tokens** under publishing access, and confirm
+   that the `opentlv` organization enforces 2FA.
+6. Dispatch later releases with `npm: true`.
+
+npm's [staged publishing](https://docs.npmjs.com/staged-publishing) would add an
+approval on npmjs.com, but `npm stage publish` packs a directory instead of
+publishing a given archive, so the workflow does not use it.
+
+### Local validation (#39)
+
+The Python infrastructure suite covers the environment protections, approvals,
+toolchain pins, the assets of the publishing attempt, rejected requests, archives
+and registry states, retries with the same or different bytes, provenance
+subjects, workflows, commits and runs, and the workflow structure. GitHub and the
+registry are mocked. The provenance checks follow the attestation of a published
+scoped package (`@sigstore/core`). No environment was created, no trusted
+publisher was configured and nothing was published. npm documents publishing a
+prebuilt archive, but its trusted publishing documentation does not show it, so
+the first workflow publication (#40) verifies that path.
 
 ## Separate distribution work
 
