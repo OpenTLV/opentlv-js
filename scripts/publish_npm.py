@@ -37,6 +37,8 @@ INPUT = ROOT / "build/npm-input"
 WORK = ROOT / "build/npm"
 BOOTSTRAP = ("npm has no @opentlv/opentlv package yet: publish the first version manually and configure "
              "the trusted publisher (docs/packaging.md#npm-publication)")
+# The only version published manually, before trusted publishing existed; every other version needs provenance.
+UNATTESTED = "0.2.0"
 
 
 def registry(url):
@@ -323,6 +325,8 @@ def verify(version, output, unattested=False):
     import ci
 
     stable(version)
+    require(not unattested or version == UNATTESTED,
+            f"Only the manually published first version {UNATTESTED} may lack npm provenance")
     require(not output.exists(), f"Use a fresh verification directory: {output}")
     url, manifest, archive = fetch_release(version, output / "release")
     expected = hashes(archive)
@@ -339,7 +343,7 @@ def verify(version, output, unattested=False):
     if attestations:
         provenance = check_provenance(attestations, {**expected, "version": version, "identity": identity})
     else:
-        require(unattested, "npm lists no provenance; only the manually published first version may lack it")
+        require(unattested, f"npm lists no provenance; only the manually published {UNATTESTED} may lack it")
         provenance = None
     runner = ci.Runner(output)
     runner.env["npm_config_update_notifier"] = "false"
@@ -371,7 +375,7 @@ def main():
     check.add_argument("version", help="Published stable version, without the v prefix")
     check.add_argument("--output", type=Path, required=True, help="Fresh verification directory")
     check.add_argument("--unattested", action="store_true",
-                       help="Accept a version without npm provenance (the manually published first version)")
+                       help=f"Accept {UNATTESTED}, the manually published first version, without npm provenance")
     args = parser.parse_args()
     if args.command == "prepare":
         prepare()

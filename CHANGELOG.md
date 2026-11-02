@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Restrict `publish_npm.py verify --unattested` to `0.2.0`, the manually published first version, and reject it for any other version before downloading anything, so every later version without npm provenance fails verification. (#40)
 - Add the missing TypeScript declaration for the `./opentlv-core.js` export, which failed strict consumers with TS7016, and use the `git+https` repository URL that npm otherwise corrects at publish time. The archive now has 22 files. (#38)
 
 ## [0.1.0] - 2026-10-28

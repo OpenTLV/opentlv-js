@@ -377,7 +377,9 @@ python -B scripts/publish_npm.py verify 0.2.0 --unattested --output build/npm-ve
    not be older.
 3. If npm lists provenance, it must name the archive, `js-release.yml` on `main`,
    the released commit and the release run. A version without provenance fails
-   unless `--unattested` is given, which only the manual first version needs.
+   unless `--unattested` is given, and `--unattested` is rejected before any
+   download for every version except `0.2.0`, the manual first version
+   (`UNATTESTED` in the script). Later versions without provenance always fail.
 4. It installs the version from the registry into a clean consumer outside the
    checkout, without inherited Node or npm settings and with a fresh cache. Every
    installed file must equal the tested archive. The consumer check, strict

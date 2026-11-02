@@ -367,6 +367,16 @@ class Verify(unittest.TestCase):
         self.assertEqual(common[common.index("--registry") + 1], publish_npm.REGISTRY + "/")
         publish_npm.audit.assert_called_with({"version": "0.2.0", "integrity": self.expected["integrity"]})
 
+    def test_later_versions_cannot_skip_provenance(self):
+        self.assertEqual(publish_npm.UNATTESTED, "0.2.0")
+        for version in ("0.2.1", "0.3.0", "1.0.0", "0.1.0"):
+            output = self.root / f"later-{version}"
+            with self.subTest(version=version), mock.patch.object(publish_npm, "registry") as registry, \
+                    self.assertRaisesRegex(ValueError, "Only the manually published first version 0.2.0"):
+                publish_npm.verify(version, output, unattested=True)
+            registry.assert_not_called()
+            self.assertFalse(output.exists())
+
     def test_published_provenance_must_name_the_release_run(self):
         self.info["dist"]["attestations"] = {"url": f"{publish_npm.REGISTRY}/-/npm/v1/attestations/"
                                                     "@opentlv%2fopentlv@0.2.0",
