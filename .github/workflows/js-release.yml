@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Unused JS tag matching package.json and ci/release-notes.md (v0.1.0)
+        description: Unused JS tag matching package.json and ci/release-notes.md (v0.2.0)
         required: true
         type: string
       npm:

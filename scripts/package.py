@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 Marek Cingel
-"""Stage and check a private local npm archive; never publish or create a release."""
+"""Stage and check a local npm archive; never publish or create a release."""
 
 import argparse
 import hashlib
@@ -36,6 +36,14 @@ FILES = {*DECLARATIONS, "package.json", "index.mjs", "version.mjs", "package-inf
          "README.md", "CHANGELOG.md", *NOTICES, *(f"dist/{name}" for name in OUTPUTS)}
 REPOSITORY = {"type": "git", "url": "git+https://github.com/OpenTLV/opentlv-js.git"}
 BROWSERS = ("google-chrome", "chromium", "chromium-browser")
+# Node suites and examples run against an installed package's dist/ directory.
+INSTALLED = (("smoke", "tests/smoke.mjs"), ("example", "examples/parse.mjs"),
+             ("fields", "tests/format_fields.mjs"), ("fields-example", "examples/fields.mjs"),
+             ("streaming", "tests/streaming.mjs"), ("streaming-example", "examples/streaming.mjs"),
+             ("document-schema", "tests/document_schema.mjs"),
+             ("document-schema-example", "examples/document_schema.mjs"),
+             ("codecs-generator", "tests/codecs_generator.mjs"), ("generic", "tests/generic.mjs"),
+             ("codecs-generator-example", "examples/codecs_generator.mjs"))
 # SemVer numeric prerelease identifiers must not have leading zeroes.
 NUMBER = r"(?:0|[1-9][0-9]*)"
 IDENTIFIER = rf"(?:{NUMBER}|[0-9]*[A-Za-z-][0-9A-Za-z-]*)"
@@ -57,8 +65,8 @@ def metadata(root=ROOT):
     data = json.loads(read_file(root / "package.json"))
     if not isinstance(data.get("version"), str) or not SEMVER.fullmatch(data["version"]):
         raise ValueError("Package version must be independent SemVer")
-    if data.get("name") != NAME or data.get("private") is not True:
-        raise ValueError(f"The local package must remain private and named {NAME}")
+    if data.get("name") != NAME or "private" in data:
+        raise ValueError(f"The package must be named {NAME} and not declare private")
     if data.get("type") != "module" or data.get("main") != "./index.mjs" or data.get("exports") != EXPORTS:
         raise ValueError("Package ESM exports do not match the existing artifacts")
     if (set(data.get("files", [])) != FILES - {"package.json"}
@@ -166,8 +174,20 @@ def install_consumer(runner, prefix, npm, archive, consumer, hashes, common, **o
     return installed
 
 
-def check_clean_consumer(runner, npm, archive, hashes, common):
-    """Use the archive outside the checkout, from a path that needs URL escaping."""
+def check_installed(runner, installed, prefix="installed-"):
+    """Run the Node suites, examples and the browser check against an installed package."""
+    for name, script in INSTALLED:
+        runner.run(prefix + name, "node", ROOT / script, installed / "dist")
+    browser = find_browser()
+    if browser is None:
+        raise ValueError(f"Set OPENTLV_BROWSER or install one of {', '.join(BROWSERS)} for installed-package checks")
+    observed = runner.run(prefix + "browser", "node", ROOT / "tests/package_browser.mjs", installed, browser,
+                          separate_stderr=True)
+    return json.loads(observed)["userAgent"]
+
+
+def check_clean_consumer(runner, npm, archive, hashes, common, after=None):
+    """Use the archive (or a registry spec) outside the checkout, from a path that needs URL escaping."""
     with tempfile.TemporaryDirectory(prefix="opentlv clean consumer \u00e9 ") as temporary:
         consumer = Path(temporary).resolve() / "project"
         if ROOT in consumer.parents:
@@ -176,7 +196,7 @@ def check_clean_consumer(runner, npm, archive, hashes, common):
         consumer.mkdir()
         home.mkdir()
         options = dict(cwd=consumer, env=clean_environment(runner.env, home))
-        install_consumer(runner, "clean-", npm, archive, consumer, hashes, common, **options)
+        installed = install_consumer(runner, "clean-", npm, archive, consumer, hashes, common, **options)
         tsc = shutil.which("tsc")
         if tsc is None:
             raise ValueError("TypeScript 5.9.3 tsc is required for installed-package checks")
@@ -187,6 +207,7 @@ def check_clean_consumer(runner, npm, archive, hashes, common):
         for mode, resolution in (("NodeNext", "NodeNext"), ("ESNext", "Bundler")):
             runner.run(f"types-{resolution}", tsc, "--strict", "--noEmit", "--target", "ES2022", "--lib", "ES2022",
                        "--module", mode, "--moduleResolution", resolution, consumer / "types.mts", **options)
+        return after(installed) if after else None
 
 
 def check(build, output):
@@ -227,24 +248,8 @@ def check(build, output):
         consumer = output / "consumer"
         consumer.mkdir()
         installed = install_consumer(runner, "", npm, archive, consumer, hashes, common)
-        runner.run("installed-smoke", "node", ROOT / "tests/smoke.mjs", installed / "dist")
-        runner.run("installed-example", "node", ROOT / "examples/parse.mjs", installed / "dist")
-        runner.run("installed-fields", "node", ROOT / "tests/format_fields.mjs", installed / "dist")
-        runner.run("installed-fields-example", "node", ROOT / "examples/fields.mjs", installed / "dist")
-        runner.run("installed-streaming", "node", ROOT / "tests/streaming.mjs", installed / "dist")
-        runner.run("installed-streaming-example", "node", ROOT / "examples/streaming.mjs", installed / "dist")
-        runner.run("installed-document-schema", "node", ROOT / "tests/document_schema.mjs", installed / "dist")
-        runner.run("installed-document-schema-example", "node", ROOT / "examples/document_schema.mjs", installed / "dist")
-        runner.run("installed-codecs-generator", "node", ROOT / "tests/codecs_generator.mjs", installed / "dist")
-        runner.run("installed-generic", "node", ROOT / "tests/generic.mjs", installed / "dist")
-        runner.run("installed-codecs-generator-example", "node", ROOT / "examples/codecs_generator.mjs", installed / "dist")
+        report["browser"] = check_installed(runner, installed)
         check_clean_consumer(runner, npm, archive, hashes, common)
-        browser = find_browser()
-        if browser is None:
-            raise ValueError(f"Set OPENTLV_BROWSER or install one of {', '.join(BROWSERS)} for installed-package checks")
-        observed = runner.run("installed-browser", "node", ROOT / "tests/package_browser.mjs", installed, browser,
-                              separate_stderr=True)
-        report["browser"] = json.loads(observed)["userAgent"]
         if ci.read_selection(build) != selection:
             raise ValueError("Core selection changed during package checks")
         report.update(status="passed", version=metadata()["version"], files=hashes,
@@ -268,7 +273,7 @@ def main():
     except (OSError, ValueError, KeyError, RuntimeError, subprocess.CalledProcessError, tarfile.TarError) as error:
         print(f"Package checks failed: {error}", file=sys.stderr)
         return 1
-    print(f"Private local package {result['version']} passed; no publication performed")
+    print(f"Local package {result['version']} passed; no publication performed")
     return 0
 
 

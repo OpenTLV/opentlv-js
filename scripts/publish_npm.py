@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 Marek Cingel
-"""Publish the attested GitHub release archive to npm by trusted publishing; never build or replace it."""
+"""Publish the attested GitHub release archive to npm by trusted publishing; never build or replace it.
+
+The verify command independently checks a published version against that release archive."""
 
 import argparse
 import base64
@@ -23,6 +25,7 @@ import release
 from release import REPOSITORY, ROOT, read, require, write
 
 REGISTRY = "https://registry.npmjs.org"
+GITHUB = f"https://api.github.com/repos/{REPOSITORY}"
 ENVIRONMENT = "npm"
 # Trusted publishing needs npm 11.5.1 or later on Node 22.14 or later; npm 12 would need Node 22.22.2.
 NPM_CLI = "11.21.1"
@@ -276,14 +279,106 @@ def confirm(attempts=20, delay=15):
         "provenance": invocation, "approved_by": plan["approved_by"], "uploaded": plan["upload"]})
 
 
+def download(url, path):
+    with urllib.request.urlopen(url, timeout=300) as response, path.open("wb") as stream:
+        shutil.copyfileobj(response, stream)
+
+
+def fetch_release(version, directory):
+    """Download the public GitHub release of the version and check its assets against their recorded digests."""
+    tag = "v" + version
+    published = registry(f"{GITHUB}/releases/tags/{tag}")
+    require(published is not None and published.get("draft") is False and published.get("prerelease") is False,
+            f"Missing public GitHub release {tag}")
+    archive = f"{package.ARCHIVE_PREFIX}-{version}.tgz"
+    names = {archive, "release-manifest.json", "release-notes.md"}
+    assets = published.get("assets", [])
+    require(sorted(asset["name"] for asset in assets) == sorted(names | {"SHA256SUMS"}),
+            "Unexpected GitHub release asset set")
+    directory.mkdir(parents=True)
+    for asset in assets:
+        path = directory / asset["name"]
+        download(asset["browser_download_url"], path)
+        require(asset.get("size") == path.stat().st_size and asset.get("digest") == "sha256:" + release.digest(path),
+                f"Downloaded release asset differs: {asset['name']}")
+    require((directory / "SHA256SUMS").read_text(encoding="utf-8")
+            == "".join(f"{release.digest(directory / name)}  {name}\n" for name in sorted(names)),
+            "Release checksums differ")
+    manifest = read(directory / "release-manifest.json")
+    request = manifest.get("request", {})
+    require(manifest.get("schema") == 1 and request.get("tag") == tag and request.get("version") == version
+            and request.get("notes_sha256") == release.digest(directory / "release-notes.md"),
+            "Release manifest names another version or notes")
+    require((registry(f"{GITHUB}/commits/{tag}") or {}).get("sha") == request["identity"]["commit"],
+            "Release tag differs from the released commit")
+    # The SHA-256 and file hashes that the reproduced Full builds recorded for the tested archive.
+    release.check_archive(directory / archive, manifest["package"])
+    check_manifest(directory / archive, version)
+    return published["html_url"], manifest, directory / archive
+
+
+def verify(version, output, unattested=False):
+    """Check a published npm version against its GitHub release, then use it from a clean registry install."""
+    # Reuse the CI runner's per-command logs, as the package checks do.
+    import ci
+
+    stable(version)
+    require(not output.exists(), f"Use a fresh verification directory: {output}")
+    url, manifest, archive = fetch_release(version, output / "release")
+    expected = hashes(archive)
+    info = registry(f"{PACKUMENT}/{version}")
+    require(info is not None, f"npm has no {package.NAME}@{version}")
+    require(info.get("name") == package.NAME and info.get("version") == version and same_bytes(info, expected),
+            "npm registry bytes differ from the released archive")
+    require("private" not in info and info.get("repository") == package.REPOSITORY,
+            "npm metadata differs from the released package")
+    latest = (registry(PACKUMENT) or {}).get("dist-tags", {}).get("latest")
+    require(latest is not None and stable(latest) >= stable(version), "npm latest is older than this version")
+    identity = manifest["request"]["identity"]
+    attestations = info["dist"].get("attestations")
+    if attestations:
+        provenance = check_provenance(attestations, {**expected, "version": version, "identity": identity})
+    else:
+        require(unattested, "npm lists no provenance; only the manually published first version may lack it")
+        provenance = None
+    runner = ci.Runner(output)
+    runner.env["npm_config_update_notifier"] = "false"
+    node = runner.run("node-version", "node", "--version")
+    require(node.startswith("v22."), "Verification requires Node 22")
+    npm = shutil.which("npm")
+    require(npm is not None, "npm is required for the registry install")
+    tools = {"node": node, "npm": runner.run("npm-version", npm, "--version")}
+    common = ("--ignore-scripts", "--workspaces=false", "--cache", output / "npm-cache", "--registry", REGISTRY + "/")
+    browser = package.check_clean_consumer(runner, npm, f"{package.NAME}@{version}", manifest["package"]["files"],
+                                           common, after=lambda installed: package.check_installed(
+                                               runner, installed, "registry-"))
+    audit({"version": version, "integrity": expected["integrity"]})
+    write(output / "verification.json", {
+        "schema": 1, "kind": "js-npm-verification", "package": package.NAME, "version": version,
+        "url": f"https://www.npmjs.com/package/{package.NAME}/v/{version}", "latest": latest, "release": url,
+        "commit": identity["commit"], "release_run_id": int(identity["run_id"]),
+        "integrity": expected["integrity"], "shasum": expected["shasum"], "provenance": provenance,
+        "toolchain": tools, "browser": browser, "commands": runner.commands})
+    return output / "verification.json"
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("prepare", "confirm"))
+    commands = parser.add_subparsers(dest="command", required=True)
+    commands.add_parser("prepare", help="Plan the publication in the approved release job")
+    commands.add_parser("confirm", help="Confirm the published bytes and provenance in the release job")
+    check = commands.add_parser("verify", help=verify.__doc__)
+    check.add_argument("version", help="Published stable version, without the v prefix")
+    check.add_argument("--output", type=Path, required=True, help="Fresh verification directory")
+    check.add_argument("--unattested", action="store_true",
+                       help="Accept a version without npm provenance (the manually published first version)")
     args = parser.parse_args()
     if args.command == "prepare":
         prepare()
-    else:
+    elif args.command == "confirm":
         confirm()
+    else:
+        print(verify(args.version, args.output.resolve(), args.unattested))
 
 
 if __name__ == "__main__":

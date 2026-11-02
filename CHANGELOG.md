@@ -5,10 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.0] - 2026-11-02
 
 ### Changed
 
+- Approve the first npm publication of `@opentlv/opentlv` as `0.2.0`: remove `private: true`, which package checks and the installed consumer now reject, close the changelog, write the `v0.2.0` release notes and replace the packaged README's archive-only install with `npm install @opentlv/opentlv`. Add `scripts/publish_npm.py verify`, which checks a published version against its public GitHub release (asset digests, checksums, the Full-tested archive and file hashes, tag commit), the registry metadata, integrity and `latest`, and the npm provenance when present. It then installs the version from npm into a clean consumer for the Node suites and examples, headless Chrome, strict TypeScript NodeNext and Bundler checks and `npm audit signatures`. Only the manually published first version may lack provenance (`--unattested`). (#40)
 - Record the npm archive audit of contents, metadata, WASM loading, ESM exports, declarations, Node and browser targets, license notices and provenance, with what publication must still change. The runtime files equal the published `v0.1.0` assets, `private: true` stays and a regression keeps npm publish commands and registry tokens out of workflows and scripts. (#38)
 - Select `@opentlv/opentlv` in the `opentlv` npm organization as the package identity, verified against the public registry, and document ownership and public access. Package imports and the release archive `opentlv-opentlv-<version>.tgz` use the new name, while the package stays `private: true` and nothing is published. The `opentlv-js` repository name and the published `v0.1.0` release asset are unchanged. (#37)
 

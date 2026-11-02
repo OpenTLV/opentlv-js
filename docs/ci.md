@@ -15,9 +15,9 @@ availability without an APT update or dependency on Ubuntu package mirrors.
 
 | Workflow | Trigger | Runtime checks |
 | --- | --- | --- |
-| JS Pull Request CI | PR targeting `main`, without path filters | Release build, smoke, parse example, Query facade, WASM Query ABI, private package checks |
+| JS Pull Request CI | PR targeting `main`, without path filters | Release build, smoke, parse example, Query facade, WASM Query ABI, package checks |
 | JS Main CI | Push to `main` | Same checks on the actual merged commit; upload outputs |
-| JS Full CI | Manual or reusable workflow call | Release and Debug, each with the same checks; separately two fresh Release builds, all checks in each, comparing all four output and private package hashes; upload outputs and the tested archive |
+| JS Full CI | Manual or reusable workflow call | Release and Debug, each with the same checks; separately two fresh Release builds, all checks in each, comparing all four output and package hashes; upload outputs and the tested archive |
 | JS Release | Manual dispatch on `main` with an unused tag | Requires successful Main CI on the commit, runs Full in the same attempt, then attests and publishes the tested archive as a GitHub release; with `npm: true`, publishes that archive to npm after the `npm` environment approval |
 
 Full's Release configuration and its double-build tier additionally rebuild the
@@ -191,7 +191,7 @@ or copy fixture, oracle or ABI snapshot ownership into JS.
 
 The generated module retains `web,worker,node` loader support. As in the
 immutable migration baseline, the runtime suites execute in **Node only**. The
-[private package checks](packaging.md#build-and-check) additionally load the
+[package checks](packaging.md#build-and-check) additionally load the
 installed archive in the runner's headless Chrome, as a module page and a module
 worker, which covers WASM loading, parsing and Document encoding, not the full
 API. Other browsers and bundlers are not established by this CI.
@@ -225,7 +225,7 @@ output artifact upload. Repository source paths are documented in the
 [layout guide](../README.md#repository-layout).
 A mismatch in any one fails the run. Main and Full do not implicitly prove
 reproducibility; only the double-build check does. Each build also runs the
-[private package checks](packaging.md): offline dry-run/real packing, exact
+[package checks](packaging.md): offline dry-run/real packing, exact
 archive content checks, offline installation, package exports/version/asset
 tests and the existing smoke/example/Query facade against the installed files,
 plus a clean consumer outside the checkout and the headless Chrome check.
@@ -263,7 +263,7 @@ of the four outputs**. A mismatch fails the overall Full/Release run.
 The CI result includes `migration_compatibility` only after this check succeeds;
 `migration-*-contract.json` and command logs accompany the report. This is
 distinct from double-build reproducibility: the latter compares two standalone
-builds and their private archives; migration compares the old and new build
+builds and their archives; migration compares the old and new build
 systems. Core pin upgrades keep this comparison on the recorded baseline
 lock; the current build is then checked only for its reviewed public contract.
 Future intentional runtime or toolchain changes need a reviewed replacement for
@@ -278,7 +278,7 @@ for cross-repository pins, hosted evidence, deviations and remaining gates.
 `evidence/result.json` records the tier, configuration, checkout commit/dirty
 state, tool versions, GitHub repository/SHA/ref/run/attempt when present, Core
 selection receipts, Query input identity, output hashes and command results.
-`first-package.json` (and `second-package.json` for Release) record the private
+`first-package.json` (and `second-package.json` for Release) record the
 package version, archive/file hashes, npm version and commands. Package staging,
 archives, consumers and detailed logs remain in the local `first-package/` and
 `second-package/` directories and are not included in uploaded release artifacts.
@@ -328,7 +328,7 @@ node tests/streaming.mjs <build>/dist
 ```
 
 Each CI tier runs the streaming suite and example through CTest and again against
-the installed private archive. Full/Release also verifies current additive WASM
+the installed archive. Full/Release also verifies current additive WASM
 exports and reconstructs historical sources from `ci/source-evolution.json`;
 the immutable migration inventory is unchanged. Limits, callback exceptions,
 memory growth, owned snapshots, every fixture split, balanced events and bounded
@@ -421,7 +421,7 @@ installs it before the WASM job. Runtime package installation remains offline.
 Source evolution separately verifies the changed sources and restores the immutable
 migration baseline. Release-tier
 validation still compares the reconstructed baseline's four runtime outputs and
-the current private archives from two independent builds. Local Node and type
+the current archives from two independent builds. Local Node and type
 checks do not establish hosted, browser/worker, publication or release evidence.
 
 ## Codec/Generator inventory (#6)

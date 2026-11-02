@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 Marek Cingel
-"""Private package boundaries and malformed/stale artifact regressions."""
+"""Package boundaries and malformed/stale artifact regressions."""
 
 import io
 import json
@@ -12,7 +12,7 @@ import sys
 import tarfile
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import package
@@ -119,10 +119,11 @@ class PackageTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Stale or modified type declaration"):
             self.stage()
 
-    def test_package_identity_is_the_selected_private_scoped_name(self):
+    def test_package_identity_is_the_selected_public_scoped_name(self):
         data = package.metadata(self.source)
         self.assertEqual(data["name"], "@opentlv/opentlv")
-        self.assertIs(data["private"], True)
+        # Publication was approved in #40; npm refuses a package that declares private.
+        self.assertNotIn("private", data)
         self.assertEqual(package.ARCHIVE_PREFIX, "opentlv-opentlv")
         self.stage()
         info = json.loads((self.root / "stage/package-info.json").read_text())
@@ -187,8 +188,21 @@ class PackageTests(unittest.TestCase):
         self.assertIn("run: google-chrome --version", workflow)
         self.assertIn("google-chrome", package.BROWSERS)
 
+    def test_installed_checks_run_every_suite_and_the_browser(self):
+        runner = Mock()
+        runner.run.return_value = '{"userAgent": "Chrome"}'
+        with patch.dict(os.environ, {"OPENTLV_BROWSER": "/custom/chrome"}):
+            self.assertEqual(package.check_installed(runner, Path("/installed"), "registry-"), "Chrome")
+        names = [call.args[0] for call in runner.run.call_args_list]
+        self.assertEqual(names, [f"registry-{name}" for name, _ in package.INSTALLED] + ["registry-browser"])
+        for _, script in package.INSTALLED:
+            with self.subTest(script=script):
+                self.assertTrue((package.ROOT / script).is_file())
+        with patch.object(package, "find_browser", return_value=None), self.assertRaisesRegex(ValueError, "BROWSER"):
+            package.check_installed(Mock(), Path("/installed"))
+
     def test_publishable_or_inaccurate_metadata_fails(self):
-        for change in ({"private": False}, {"name": "opentlv-js"}, {"name": "@opentlv/js"}, {"exports": {}},
+        for change in ({"private": True}, {"private": False}, {"name": "opentlv-js"}, {"name": "@opentlv/js"}, {"exports": {}},
                        {"scripts": {"prepack": "exit 0"}}, {"dependencies": {}},
                        {"types": "missing.d.ts"}, {"files": ["**/*"]}, {"type": "commonjs"},
                        {"engines": {"node": ">=18"}}, {"publishConfig": {}}, {"license": "UNLICENSED"}):

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Marek Cingel
-// Copied into a consumer project and run against the installed local archive.
+// Copied into a consumer project and run against the installed local archive or registry package.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
@@ -11,7 +11,7 @@ import createOpenTLV from "@opentlv/opentlv/opentlv-core.js";
 import { packageVersion } from "@opentlv/opentlv/version";
 
 const metadata = JSON.parse(await readFile(new URL(import.meta.resolve("@opentlv/opentlv/package.json"))));
-assert.equal(metadata.private, true);
+assert.equal(Object.hasOwn(metadata, "private"), false);
 assert.equal(packageVersion, metadata.version);
 assert.equal(entry.packageVersion, metadata.version);
 assert.deepEqual(Object.keys(entry).sort(), [...Object.keys(facade), "packageVersion"].sort());

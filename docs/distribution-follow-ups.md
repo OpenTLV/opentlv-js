@@ -5,7 +5,8 @@ These open work items are deferred from
 the [final migration assessment (#14)](https://github.com/OpenTLV/opentlv-js/issues/14).
 This versioned register tracks the scope without creating remote issues or
 claiming publication readiness. Each item needs a separately approved
-implementation before the private-package restriction can change.
+implementation; #40 is the approved publication change that removes the
+private-package restriction.
 
 Reviewed for #14 on 2026-10-26: publication items remain open. Issue #5 adds
 TypeScript declarations and installed consumer checks; runtime distribution
@@ -17,8 +18,7 @@ complete any publication item.
 ## NPM-1: Registry publication (open)
 
 - Issue #37 selects `@opentlv/opentlv` in the `opentlv` organization; see
-  [Package identity](packaging.md#package-identity). Confirming organization-wide
-  2FA enforcement remains open.
+  [Package identity](packaging.md#package-identity).
 - Issue #32 defines release versions, `v`-prefixed tag matching and the GitHub
   release of the tested archive against the pinned Core (`v0.1.0` with Core
   `v0.8.0`); see [GitHub release](packaging.md#github-release). Prerelease
@@ -27,14 +27,19 @@ complete any publication item.
   workflow: trusted publishing without a registry token, a protected `npm`
   environment with required approval, the attested GitHub release archive bound
   to its commit, Full evidence and run, and verification of registry bytes,
-  provenance and signatures. Creating the environment, the manual first version
-  and the trusted publisher configuration remain for #40. The stable-only
-  versioning means npm uses only the `latest` dist-tag.
+  provenance and signatures. The stable-only versioning means npm uses only the
+  `latest` dist-tag.
 - Define the retention of evidence, rollback/deprecation policy and registry
   account recovery.
 - Issue #38 records what publication still has to change; see
   [Archive audit](packaging.md#archive-audit-38).
-- Remove `private: true` only in the separately reviewed publication change.
+- Issue #40 removes `private: true`, prepares `0.2.0` as the first registry
+  version and adds [verification](packaging.md#verify-a-published-version) of a
+  published version against its release archive. Creating the `npm`
+  environment, publishing the manual first version, configuring the trusted
+  publisher, confirming organization-wide 2FA and recording the verification
+  remain maintainer steps; see
+  [Setup and first version](packaging.md#setup-and-first-version).
 
 ## SEC-1: Security and advisory process (open)
 

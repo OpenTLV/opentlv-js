@@ -1,15 +1,18 @@
 # OpenTLV JavaScript / WebAssembly
 
 Experimental JavaScript facade and WebAssembly bridge for
-[OpenTLV](https://github.com/OpenTLV/opentlv-js). This archive is distributed
-through GitHub Releases; it is **not published to the npm registry** and stays
-`private`. `@opentlv/opentlv` is the name selected for the npm registry; nothing
-has been published under it.
+[OpenTLV](https://github.com/OpenTLV/opentlv-js), published on npm as
+`@opentlv/opentlv`. Each version's archive, release evidence and checksums are
+also attached to its
+[GitHub release](https://github.com/OpenTLV/opentlv-js/releases).
 
 ## Usage
 
-After installing the archive into a Node 22 project, for example with
-`npm install ./opentlv-opentlv-<version>.tgz`:
+Install the package into a Node 22 project:
+
+```sh
+npm install @opentlv/opentlv
+```
 
 ```js
 import { loadOpenTLV, hexToBytes, packageVersion } from "@opentlv/opentlv";
@@ -63,15 +66,18 @@ Core-version meaning. `package-info.json` records the selected Core commit,
 source checksum, version inputs and hashes of the four outputs separately.
 It explicitly sets `release_verified: false`; it is build information, not
 release attestation. GitHub release assets have separate build provenance
-attestations and a `release-manifest.json` with the hosted evidence.
+attestations and a `release-manifest.json` with the hosted evidence. npm serves
+the same archive bytes. Versions published by the release workflow also have
+npm provenance; the first registry version, 0.2.0, was published from the
+attested archive without it.
 
-The package has no runtime npm dependencies or lifecycle hooks and remains
-`private: true`. Registry publishing, component support commitments and
-distribution improvements are deferred in the repository's
+The package has no runtime npm dependencies or lifecycle hooks. Component
+support commitments and distribution improvements are tracked in the
+repository's
 [follow-up register](https://github.com/OpenTLV/opentlv-js/blob/main/docs/distribution-follow-ups.md).
 See the repository's
 [packaging guide](https://github.com/OpenTLV/opentlv-js/blob/main/docs/packaging.md)
-for the local preparation and validation commands.
+for the local preparation, release and verification commands.
 
 ## License
 
