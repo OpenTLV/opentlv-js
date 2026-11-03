@@ -10,6 +10,8 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import urllib.parse
+import urllib.request
 
 import core_dependency as core
 import package
@@ -24,6 +26,8 @@ MAIN_GATES = {"checks / JS quality gate"}
 FULL_GATES = {"full / checks / JS quality gate", "full / reproducibility / JS quality gate"}
 # Every Full tier/configuration record the release requires from its own attempt.
 RECORDS = (("full", "Release"), ("full", "Debug"), ("release", "Release"))
+# Each publishing attempt records whether it requested a draft and the ID GitHub returned.
+JOURNAL = Path("build/publish-state/draft.json")
 
 
 def digest(path):
@@ -178,6 +182,36 @@ def validate_request(request):
             "Release request, Main evidence or source changed")
 
 
+def validate_publish_request(request):
+    """A failed publishing job may reuse this run's earlier, fully tested payload."""
+    current = hosted_identity()
+    original = request["identity"]
+    require({**current, "run_attempt": original["run_attempt"]} == original and
+            int(current["run_attempt"]) >= int(original["run_attempt"]),
+            "Publication requires the original run and commit, at the same or a later attempt")
+    require(version_for(request["tag"]) == request["version"] and
+            core_release(core.load_lock()) == request["core"] and
+            digest(NOTES) == request["notes_sha256"], "Release source changed")
+    main = main_evidence(current["commit"])
+    require(main == request["main"], "Main evidence changed; prepare a new release")
+    check_gates(main["run_id"], main["run_attempt"], MAIN_GATES)
+    if request.get("npm") is not None:
+        import publish_npm
+
+        require(publish_npm.preflight(request["version"]) == request["npm"],
+                "npm release request changed")
+
+
+def select_payload(root):
+    """Never select an arbitrary attempt when multiple assembled payloads exist."""
+    manifests = list(root.glob("js-release-*/release-manifest.json"))
+    require(len(manifests) == 1, "Publication requires exactly one assembled release payload")
+    request = read(manifests[0])["request"]
+    require(manifests[0].parent.name == "js-release-" + request["identity"]["run_attempt"],
+            "Release artifact attempt differs")
+    return manifests[0].parent
+
+
 def check_record(record, tier, configuration, request):
     current = request["identity"]
     require(record.get("schema") == 1 and record.get("status") == "passed" and
@@ -296,31 +330,154 @@ def verify_attestations(directory, commit):
             "--signer-workflow", SIGNER, "--source-digest", commit)
 
 
-def publish(directory):
-    request = verify_payload(directory)
+def load_journal(root, request):
+    """Merge the drafts recorded by earlier publishing attempts of this run and payload."""
+    records = []
+    for path in sorted(root.glob("js-draft-*/draft.json")):
+        record = read(path)
+        require(type(record) is dict, "Publication journal differs from this release")
+        identifier = record.get("release_id")
+        require(record.get("schema") == 1 and record.get("tag") == request["tag"] and
+                record.get("commit") == request["identity"]["commit"] and
+                record.get("run_id") == request["identity"]["run_id"] and
+                record.get("payload_attempt") == request["identity"]["run_attempt"] and
+                path.parent.name == "js-draft-" + str(record.get("attempt")) and
+                type(record.get("draft_requested")) is bool and
+                (identifier is None or (type(identifier) is int and identifier > 0 and
+                                        record["draft_requested"])),
+                "Publication journal differs from this release")
+        records.append(record)
+    identifiers = {record["release_id"] for record in records if record["release_id"] is not None}
+    require(len(identifiers) <= 1, "Publication journals name different releases")
+    return {"present": bool(records), "requested": any(record["draft_requested"] for record in records),
+            "release_id": next(iter(identifiers), None)}
+
+
+def published_release(tag):
+    """The exact tag endpoint serves only a published release; it never returns a draft."""
+    command = ["gh", "api", f"repos/{REPOSITORY}/releases/tags/{tag}"]
+    print("+ " + " ".join(command), flush=True)
+    result = subprocess.run(command, cwd=ROOT, text=True, encoding="utf-8", capture_output=True)
+    if result.returncode == 0:
+        return json.loads(result.stdout)
+    if "(HTTP 404)" in result.stderr:
+        return None
+    raise subprocess.CalledProcessError(result.returncode, command, result.stdout, result.stderr)
+
+
+def release_state(tag, commit, journal):
+    """Inspect only; existing bytes and refs are never overwritten or deleted.
+
+    A draft is identified only by the ID its creation returned, as recorded in this run's
+    journal. The releases list can lag behind a creation, so it only detects conflicts.
+    """
+    require(api(f"repos/{REPOSITORY}/git/ref/heads/main")["object"]["sha"] == commit,
+            "Main moved; validate and release the new commit")
+    refs = api(f"repos/{REPOSITORY}/git/matching-refs/tags/{tag}")
+    tagged = any(ref["ref"] == "refs/tags/" + tag for ref in refs)
+    matches = [item for item in pages(f"repos/{REPOSITORY}/releases") if item["tag_name"] == tag]
+    require(len(matches) <= 1, "Duplicate releases for the tag")
+    if tagged:
+        require(api(f"repos/{REPOSITORY}/commits/{tag}")["sha"] == commit,
+                "Tag already exists at another commit")
+    identifier = journal["release_id"]
+    if identifier is not None:
+        require(tagged, "The recorded release has lost its tag")
+    elif journal["requested"]:
+        raise ValueError("An earlier attempt requested a draft without recording its release ID; "
+                         "inspect the releases of the tag before any retry")
+    elif tagged:
+        published = published_release(tag)
+        if published is not None:
+            identifier = published.get("id")
+            require(type(identifier) is int and identifier > 0 and published.get("tag_name") == tag,
+                    "Published release identity differs")
+        else:
+            # Without a journal (a lost runner), an unlisted draft of an earlier attempt may exist.
+            require(journal["present"], "The tag exists, but no publication journal of this run "
+                    "shows that no draft was requested; inspect the releases of the tag")
+            require(not matches, "An unrecorded release exists for the tag")
+    else:
+        require(not matches, "A release exists without its tag")
+    require(all(item["id"] == identifier for item in matches), "Conflicting release identity")
+    return tagged, identifier
+
+
+def create_draft(directory, request, journal):
+    """Keep the REST creation identity; neither a list nor an untagged URL identifies it."""
+    # Recorded before the request, so a retry never creates a second, possibly unlisted draft.
+    write(ROOT / JOURNAL, {**journal, "draft_requested": True})
+    output = run(
+        "gh", "api", "--method", "POST", f"repos/{REPOSITORY}/releases",
+        "-f", "tag_name=" + request["tag"], "-f", "name=OpenTLV JS " + request["tag"],
+        "-f", "body=" + (directory / "release-notes.md").read_text(encoding="utf-8"),
+        "-F", "draft=true", "-F", "prerelease=false", capture=True)
+    try:
+        created = json.loads(output)
+    except (TypeError, ValueError):
+        created = None
+    require(type(created) is dict, "Draft creation returned no release object")
+    identifier = created.get("id")
+    require(type(identifier) is int and identifier > 0 and created.get("tag_name") == request["tag"]
+            and created.get("draft") is True and created.get("prerelease") is False,
+            "Created draft identity differs")
+    write(ROOT / JOURNAL, {**journal, "draft_requested": True, "release_id": identifier})
+    for path in sorted(directory.iterdir()):
+        upload_asset(identifier, path)
+    return identifier
+
+
+def upload_asset(identifier, path):
+    # Construct the host and path ourselves; never send a token to a response-provided upload URL.
+    url = (f"https://uploads.github.com/repos/{REPOSITORY}/releases/{identifier}/assets?name=" +
+           urllib.parse.quote(path.name, safe=""))
+    request = urllib.request.Request(url, data=path.read_bytes(), method="POST", headers={
+        "Authorization": "Bearer " + os.environ["GH_TOKEN"],
+        "Content-Type": "application/octet-stream", "Accept": "application/vnd.github+json"})
+    with urllib.request.urlopen(request, timeout=120) as response:
+        json.load(response)
+
+
+def publish(directory, journals):
+    request = verify_payload(directory, validate=validate_publish_request)
     commit = request["identity"]["commit"]
     verify_attestations(directory, commit)
-    # Final read before the first write; never overwrite an existing tag/release.
-    unused_tag(request["tag"], commit)
-    run("gh", "api", "--method", "POST", f"repos/{REPOSITORY}/git/refs",
-        "-f", "ref=refs/tags/" + request["tag"], "-f", "sha=" + commit)
-    run("gh", "release", "create", request["tag"], "--repo", REPOSITORY, "--verify-tag",
-        "--draft", "--title", "OpenTLV JS " + request["tag"],
-        "--notes-file", directory / "release-notes.md", *sorted(directory.iterdir()))
+    current = hosted_identity()
+    state = load_journal(journals, request)
+    journal = {"schema": 1, "tag": request["tag"], "commit": commit,
+               "run_id": request["identity"]["run_id"],
+               "payload_attempt": request["identity"]["run_attempt"],
+               "attempt": current["run_attempt"], "draft_requested": state["requested"],
+               "release_id": state["release_id"]}
+    write(ROOT / JOURNAL, journal)  # Before the first write: a retry learns that no draft was requested.
+    tagged, identifier = release_state(request["tag"], commit, state)
+    if not tagged:
+        run("gh", "api", "--method", "POST", f"repos/{REPOSITORY}/git/refs",
+            "-f", "ref=refs/tags/" + request["tag"], "-f", "sha=" + commit)
+    if identifier is None:
+        identifier = create_draft(directory, request, journal)
+    release = api(f"repos/{REPOSITORY}/releases/{identifier}")
+    require(release.get("id") == identifier and type(release.get("draft")) is bool,
+            "Release identity differs")
+    # An absent list entry is harmless after creation; a conflicting entry is not.
     matches = [item for item in pages(f"repos/{REPOSITORY}/releases")
                if item["tag_name"] == request["tag"]]
-    require(len(matches) == 1, "Missing or duplicate draft release")
-    release = api(f"repos/{REPOSITORY}/releases/{matches[0]['id']}")
-    verify_published_assets(release, directory, request, True)
+    require(len(matches) <= 1 and all(item["id"] == identifier for item in matches),
+            "Conflicting or duplicate release identity")
+    verify_published_assets(release, directory, request, release["draft"])
     require(api(f"repos/{REPOSITORY}/commits/{request['tag']}")["sha"] == commit,
             "Release tag changed")
-    run("gh", "release", "edit", request["tag"], "--repo", REPOSITORY, "--draft=false")
-    release = api(f"repos/{REPOSITORY}/releases/{release['id']}")
+    if release["draft"]:
+        run("gh", "api", "--method", "PATCH", f"repos/{REPOSITORY}/releases/{identifier}",
+            "-F", "draft=false")
+    release = api(f"repos/{REPOSITORY}/releases/{identifier}")
+    require(release.get("id") == identifier, "Published release identity differs")
     verify_published_assets(release, directory, request, False)
     require(api(f"repos/{REPOSITORY}/commits/{request['tag']}")["sha"] == commit,
             "Published tag changed")
     write(ROOT / "build/published.json", {"url": release["html_url"], "tag": request["tag"],
-                                        "identity": request["identity"], "core": request["core"],
+                                        "release_id": identifier, "identity": current,
+                                        "payload_identity": request["identity"], "core": request["core"],
                                         "assets": [asset["name"] for asset in release["assets"]]})
     print(release["html_url"])
 
@@ -337,7 +494,8 @@ def main():
         assemble(ROOT / "build/evidence", ROOT / "build/release")
     else:
         (ROOT / "build/published.json").unlink(missing_ok=True)
-        publish(ROOT / "build/release")
+        (ROOT / JOURNAL).unlink(missing_ok=True)
+        publish(select_payload(ROOT / "build/publish-input"), ROOT / "build/publish-state-input")
 
 
 if __name__ == "__main__":

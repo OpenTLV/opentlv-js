@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-11-03
+
+### Fixed
+
+- A publishing retry no longer finds an existing draft through the releases list, which can lag behind its creation. It uses only the release ID that the creation returned, recorded in a `js-draft-<attempt>` journal artifact that every attempt uploads, even when it fails. A retry stops instead of creating a second draft when a draft was requested but no ID was recorded (lost or malformed response), or when the tag exists without any journal of the run. Without a recorded ID, an existing release is accepted only through the exact published-release-by-tag endpoint. A creation response that is not a complete draft object never reaches the upload. The release notes describe npm provenance for `0.2.1` as expected, not confirmed. (#47)
+- Identify newly created GitHub release drafts by the REST response ID and upload, verify and publish through that ID, avoiding delayed release-list visibility. Recover a failed publishing job from the original run's attested payload, accepting only the exact tag, commit, metadata and asset bytes; reject partial or conflicting drafts and preserve the original Full CI evidence through npm publication. (#47)
+
+### Changed
+
+- Prepare JS `0.2.1` with Core still pinned to `v0.8.0`: close the changelog and write the `v0.2.1` release notes; document direct npm publishing, protected-environment checks, recovery and the outstanding first live OIDC/provenance validation. (#47)
+
 ## [0.2.0] - 2026-11-02
 
 ### Changed

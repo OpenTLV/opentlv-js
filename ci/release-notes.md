@@ -1,26 +1,23 @@
-# OpenTLV JS v0.2.0
+# OpenTLV JS v0.2.1
 
-First npm registry release: the JavaScript/WebAssembly package is published as
-**`@opentlv/opentlv`** in the `opentlv` npm organization, versioned
-independently of Core. Install it with `npm install @opentlv/opentlv`.
+Release recovery fixes for **`@opentlv/opentlv`**, versioned independently of
+OpenTLV Core. Install with `npm install @opentlv/opentlv`.
 
-- Renames the package from `opentlv-js`: imports, including every subpath, now
-  use `@opentlv/opentlv`. The exported API is unchanged from v0.1.0.
-- Builds OpenTLV Core **v0.8.0** from the same exact source commit as v0.1.0,
-  `345c77acb29266036df5f27d04ce315bb61853cc`.
-- Adds the missing TypeScript declaration for the `./opentlv-core.js` export,
-  which strict consumers rejected with TS7016.
-- Requires Node 22 and ES modules. Built with Emscripten 4.0.10; installed
-  consumers are type-checked with TypeScript 5.9.3 (NodeNext and Bundler).
-  Package checks also load the archive in headless Chrome, as a module page
-  and a module worker.
-- Distributes the reproduced and tested archive `opentlv-opentlv-0.2.0.tgz`,
-  release evidence and SHA-256 checksums through GitHub Releases. npm serves
-  these same bytes. See
-  [packaging](https://github.com/OpenTLV/opentlv-js/blob/v0.2.0/docs/packaging.md).
+- Uses the exact GitHub release ID returned when creating a draft, so delayed
+  release-list visibility no longer prevents publication.
+- Allows a failed publishing job to resume with the original attested assets
+  and Full CI evidence. Conflicting tags, partial uploads, altered notes and
+  different asset bytes stop recovery without replacing or deleting anything.
+- Keeps the JavaScript API and pinned Core **v0.8.0** source commit
+  `345c77acb29266036df5f27d04ce315bb61853cc` unchanged.
+- Preserves Node 22, Emscripten 4.0.10, TypeScript 5.9.3, installed-consumer,
+  headless Chrome page/worker and double-build reproducibility checks.
+- Retains direct npm publication of the attested archive through the protected
+  `npm` environment. Staged npm publishing is not implemented.
 
-This first registry version is published by the maintainer from the attested
-release archive, so it has the GitHub attestation but no npm provenance. Later
-versions are published by the release workflow with npm provenance. Other
-browsers and bundlers are not validated. Symbol references do not prove
-functional parity, and Builtins-specific parity remains outside this release.
+The release workflow is to publish this version to npm through trusted
+publishing (OIDC, no registry token), the first time it does so; npm is then
+expected to list its SLSA provenance. The `0.2.0` exception for a version
+without provenance does not apply: verification fails if provenance is missing.
+Verify the npm version with
+[`scripts/publish_npm.py verify`](https://github.com/OpenTLV/opentlv-js/blob/v0.2.1/docs/packaging.md#verify-a-published-version).

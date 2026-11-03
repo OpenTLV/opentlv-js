@@ -113,7 +113,10 @@ def select(root, run_id):
     attempt = str(record.get("identity", {}).get("run_attempt"))
     require(record["identity"].get("run_id") == run_id and records[0].parent.name == "js-published-" + attempt,
             "The GitHub release was not published by this run")
-    directory = root / ("js-release-" + attempt)
+    payload = record.get("payload_identity", record["identity"])
+    require({**payload, "run_attempt": attempt} == record["identity"] and
+            int(payload["run_attempt"]) <= int(attempt), "Release payload identity differs")
+    directory = root / ("js-release-" + payload["run_attempt"])
     require(directory.is_dir(), "Missing the release assets of the publishing attempt")
     return record, directory
 
@@ -131,14 +134,20 @@ def check_request(request, current):
 
 def check_github_release(directory, request, record):
     """Require the public GitHub release and its tag to hold exactly these assets."""
-    matches = [item for item in release.pages(f"repos/{REPOSITORY}/releases") if item["tag_name"] == request["tag"]]
-    require(len(matches) == 1, "Missing or duplicate GitHub release")
-    published = release.api(f"repos/{REPOSITORY}/releases/{matches[0]['id']}")
+    identifier = record.get("release_id")
+    if identifier is None:  # Receipts from the first publication predate release IDs.
+        matches = [item for item in release.pages(f"repos/{REPOSITORY}/releases")
+                   if item["tag_name"] == request["tag"]]
+        require(len(matches) == 1, "Missing or duplicate GitHub release")
+        identifier = matches[0]["id"]
+    published = release.api(f"repos/{REPOSITORY}/releases/{identifier}")
+    require(published.get("id") == identifier, "GitHub release identity differs")
     release.verify_published_assets(published, directory, request, False)
     require(release.api(f"repos/{REPOSITORY}/commits/{request['tag']}")["sha"] == request["identity"]["commit"],
             "Release tag changed")
     require(record.get("url") == published["html_url"] and record.get("tag") == request["tag"]
-            and record.get("identity") == request["identity"] and record.get("core") == request["core"]
+            and record.get("payload_identity", record.get("identity")) == request["identity"]
+            and record.get("core") == request["core"]
             and sorted(record.get("assets", [])) == sorted(asset["name"] for asset in published["assets"]),
             "GitHub release record differs from the published release")
     return published["html_url"]
