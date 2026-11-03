@@ -33,13 +33,14 @@ complete any publication item.
   account recovery.
 - Issue #38 records what publication still has to change; see
   [Archive audit](packaging.md#archive-audit-38).
-- Issue #40 removes `private: true`, prepares `0.2.0` as the first registry
-  version and adds [verification](packaging.md#verify-a-published-version) of a
-  published version against its release archive. Creating the `npm`
-  environment, publishing the manual first version, configuring the trusted
-  publisher, confirming organization-wide 2FA and recording the verification
-  remain maintainer steps; see
-  [Setup and first version](packaging.md#setup-and-first-version).
+- Issue #40 prepared `0.2.0`; [epic #36](https://github.com/OpenTLV/opentlv-js/issues/36)
+  records its manual npm publication and independent consumer verification.
+- [Issue #47](https://github.com/OpenTLV/opentlv-js/issues/47) tracks the configured
+  but not yet live-validated Trusted Publisher, saved environment and npm account
+  policies, release recovery hardening, and the next genuine release (`0.2.1`).
+  Direct publishing remains the chosen flow. See
+  [configuration and evidence](packaging.md#direct-publishing-and-configuration-evidence-47).
+  Local tests do not complete these hosted configuration/publication gates.
 
 ## SEC-1: Security and advisory process (open)
 

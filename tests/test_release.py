@@ -30,22 +30,27 @@ def workflow(name):
 
 class Preflight(unittest.TestCase):
     def test_version_and_notes_match_the_release(self):
-        self.assertEqual(release.version_for("v0.2.0"), "0.2.0")
-        for tag in ("", "v0.8.0", "0.1.0", "V0.1.0", "v0.1", "v0.1.0-dev.0", "v00.1.0", " v0.2.0", "v0.1.0",
-                    "../main"):
-            with self.subTest(tag=tag), self.assertRaises(ValueError):
-                release.version_for(tag)
+        version = release.package.metadata(release.ROOT)["version"]
+        tag = "v" + version
+        changelog = (release.ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+        closed = changelog.replace("## [Unreleased]", f"## [{version}] - 2026-11-03")
+        original = Path.read_text
+        with mock.patch.object(Path, "read_text", lambda path, *args, **kwargs: closed
+                               if path.name == "CHANGELOG.md" else original(path, *args, **kwargs)):
+            self.assertEqual(release.version_for(tag), version)
+        for invalid in ("", "v0.8.0", "0.1.0", "V0.1.0", "v0.1", "v0.1.0-dev.0", "v00.1.0",
+                        " " + tag, "v0.1.0", "../main"):
+            with self.subTest(tag=invalid), self.assertRaises(ValueError):
+                release.version_for(invalid)
 
     def test_release_requires_a_closed_changelog_section(self):
-        changelog = (release.ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
-        for text in (changelog.replace("## [0.2.0] - 2026-11-02", "## [Unreleased]"),
-                     changelog.replace("## [0.2.0] - 2026-11-02", "## [0.2.0]")):
-            original = Path.read_text
-            with self.subTest(text=text[:200]), \
-                    mock.patch.object(Path, "read_text", lambda self, *args, **kwargs: text
-                                      if self.name == "CHANGELOG.md" else original(self, *args, **kwargs)), \
+        version = release.package.metadata(release.ROOT)["version"]
+        original = Path.read_text
+        for heading in ("## [Unreleased]", f"## [{version}]"):
+            with mock.patch.object(Path, "read_text", lambda path, *args, **kwargs: heading
+                                   if path.name == "CHANGELOG.md" else original(path, *args, **kwargs)), \
                     self.assertRaisesRegex(ValueError, "changelog"):
-                release.version_for("v0.2.0")
+                release.version_for("v" + version)
 
     def test_core_lock_must_be_the_exact_release_commit(self):
         lock = core.load_lock()
@@ -158,7 +163,7 @@ class Payload(unittest.TestCase):
             release.write(self.evidence / f"records/js-evidence-{tier}-{configuration}-2/result.json",
                           record)
         release.write(self.evidence / "request.json", self.request)
-        for name in ("validate_request", "check_gates"):
+        for name in ("validate_request", "validate_publish_request", "check_gates"):
             patcher = mock.patch.object(release, name)
             patcher.start()
             self.addCleanup(patcher.stop)
@@ -245,7 +250,7 @@ class Payload(unittest.TestCase):
     def test_attestation_failure_precedes_any_publication_write(self):
         self.assemble()
         with mock.patch.object(release, "run", side_effect=subprocess.CalledProcessError(1, "gh")) as run, \
-                mock.patch.object(release, "unused_tag") as unused, \
+                mock.patch.object(release, "release_state") as unused, \
                 self.assertRaises(subprocess.CalledProcessError):
             release.publish(self.output)
         self.assertEqual(run.call_args.args[1:3], ("attestation", "verify"))
@@ -273,33 +278,98 @@ class Payload(unittest.TestCase):
             with self.assertRaises(ValueError):
                 release.verify_published_assets(changed, self.output, self.request, True)
 
-    def test_publication_verifies_draft_before_making_it_public(self):
+    def publish(self, state=(False, None), remote=None, listed=None, fail=None):
+        draft = remote or self.published()
+        replies = [draft, {"sha": IDENTITY["commit"]},
+                   self.published(draft=False), {"sha": IDENTITY["commit"]}]
+        def command(*args, **kwargs):
+            if args[1:4] == ("api", "--method", "POST") and args[4].endswith("/releases"):
+                return json.dumps(self.published())
+            if fail and args[1:4] == ("api", "--method", "PATCH"):
+                raise subprocess.CalledProcessError(1, "gh")
+            return None
+        with mock.patch.object(release, "run", side_effect=command) as run, \
+                mock.patch.object(release, "upload_asset") as upload, \
+                mock.patch.object(release, "release_state", return_value=state), \
+                mock.patch.object(release, "pages", return_value=listed or []), \
+                mock.patch.object(release, "api", side_effect=replies), \
+                mock.patch.object(release, "hosted_identity", return_value={**IDENTITY, "run_attempt": "3"}), \
+                mock.patch.object(release, "ROOT", self.root), mock.patch("builtins.print"):
+            try:
+                release.publish(self.output)
+            finally:
+                self.calls = [call.args for call in run.call_args_list]
+                self.uploads = upload.call_args_list
+
+    def writes(self, method):
+        return [args for args in self.calls if args[1:4] == ("api", "--method", method)]
+
+    def test_creation_uses_returned_identity_despite_delayed_listing(self):
         self.assemble()
-        draft = self.published()
-        for corrupt in (False, True):
-            remote = copy.deepcopy(draft)
-            if corrupt:
-                remote["assets"][0]["digest"] = "sha256:" + "0" * 64
-            replies = [remote, {"sha": IDENTITY["commit"]},
-                       self.published(draft=False), {"sha": IDENTITY["commit"]}]
-            with self.subTest(corrupt=corrupt), mock.patch.object(release, "run") as run, \
-                    mock.patch.object(release, "unused_tag"), \
-                    mock.patch.object(release, "pages", return_value=[draft]), \
-                    mock.patch.object(release, "api", side_effect=replies), \
-                    mock.patch.object(release, "ROOT", self.root), mock.patch("builtins.print"):
-                if corrupt:
-                    with self.assertRaisesRegex(ValueError, "digest"):
-                        release.publish(self.output)
-                else:
-                    release.publish(self.output)
-                    published = json.loads((self.root / "build/published.json").read_text())
-                    self.assertEqual(published["url"], draft["html_url"])
-                calls = [call.args for call in run.call_args_list]
-                self.assertTrue(all(args[1:3] == ("attestation", "verify") for args in calls[:4]))
-                self.assertEqual(calls[4][1:4], ("api", "--method", "POST"))
-                self.assertIn("--draft", calls[5])
-                edits = [args for args in calls if args[1:3] == ("release", "edit")]
-                self.assertEqual(len(edits), 0 if corrupt else 1)
+        self.publish()
+        self.assertEqual(len(self.writes("POST")), 2)
+        self.assertEqual({call.args[0] for call in self.uploads}, {42})
+        self.assertEqual({call.args[1].name for call in self.uploads},
+                         {path.name for path in self.output.iterdir()})
+        self.assertEqual(self.writes("PATCH"), [("gh", "api", "--method", "PATCH",
+                         f"repos/{release.REPOSITORY}/releases/42", "-F", "draft=false")])
+        record = release.read(self.root / "build/published.json")
+        self.assertEqual(record["release_id"], 42)
+        self.assertEqual(record["identity"]["run_attempt"], "3")
+        self.assertEqual(record["payload_identity"], IDENTITY)
+
+    def test_tag_only_retry_creates_only_the_draft(self):
+        self.assemble()
+        self.publish(state=(True, None))
+        self.assertEqual(len(self.writes("POST")), 1)
+        self.assertTrue(self.writes("POST")[0][4].endswith("/releases"))
+
+    def test_matching_draft_retry_never_reuploads_assets(self):
+        self.assemble()
+        self.publish(state=(True, 42))
+        self.assertEqual(self.writes("POST"), [])
+        self.assertEqual(self.uploads, [])
+        self.assertEqual(len(self.writes("PATCH")), 1)
+
+    def test_public_release_retry_only_verifies_and_records(self):
+        self.assemble()
+        self.publish(state=(True, 42), remote=self.published(False))
+        self.assertEqual(self.writes("POST") + self.writes("PATCH"), [])
+        self.assertEqual(self.uploads, [])
+
+    def test_partial_mismatched_or_conflicting_drafts_fail_without_writes(self):
+        self.assemble()
+        for kind in ("partial", "duplicate", "extra", "digest", "size", "state", "body",
+                     "tag", "prerelease", "id", "listed_id", "listed_duplicate"):
+            draft = self.published()
+            listed = []
+            if kind == "partial":
+                draft["assets"].pop()
+            elif kind in ("duplicate", "extra"):
+                draft["assets"].append({**draft["assets"][0], "name":
+                                        "extra" if kind == "extra" else draft["assets"][0]["name"]})
+            elif kind in ("digest", "size", "state"):
+                draft["assets"][0][kind] = "wrong"
+            elif kind in ("body", "tag", "prerelease", "id"):
+                draft[{"tag": "tag_name"}.get(kind, kind)] = "wrong"
+            elif kind == "listed_id":
+                listed = [{"tag_name": self.request["tag"], "id": 99}]
+            else:
+                listed = [draft, draft]
+            with self.subTest(kind=kind), self.assertRaises(ValueError):
+                self.publish(state=(True, 42), remote=draft, listed=listed)
+            self.assertEqual(self.writes("POST") + self.writes("PATCH"), [])
+            self.assertEqual(self.uploads, [])
+
+    def test_failed_publication_can_retry_the_same_verified_draft(self):
+        self.assemble()
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.publish(state=(True, 42), fail=True)
+        self.assertFalse((self.root / "build/published.json").exists())
+        self.publish(state=(True, 42))
+        self.assertTrue((self.root / "build/published.json").exists())
+        self.assertEqual(self.writes("POST"), [])
+
 
 
 class Workflow(unittest.TestCase):

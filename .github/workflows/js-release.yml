@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Unused JS tag matching package.json and ci/release-notes.md (v0.2.0)
+        description: Unused JS tag matching package.json and ci/release-notes.md (v0.2.1)
         required: true
         type: string
       npm:
@@ -90,8 +90,9 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
-          name: js-release-${{ github.run_attempt }}
-          path: build/release
+          # A failed publish job reuses the original attempt's attested payload.
+          pattern: js-release-*
+          path: build/publish-input
       - env:
           GH_TOKEN: ${{ github.token }}
         run: python3 -B scripts/release.py publish

@@ -10,6 +10,8 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import urllib.parse
+import urllib.request
 
 import core_dependency as core
 import package
@@ -178,6 +180,36 @@ def validate_request(request):
             "Release request, Main evidence or source changed")
 
 
+def validate_publish_request(request):
+    """A failed publishing job may reuse this run's earlier, fully tested payload."""
+    current = hosted_identity()
+    original = request["identity"]
+    require({**current, "run_attempt": original["run_attempt"]} == original and
+            int(current["run_attempt"]) >= int(original["run_attempt"]),
+            "Publication requires the original run and commit, at the same or a later attempt")
+    require(version_for(request["tag"]) == request["version"] and
+            core_release(core.load_lock()) == request["core"] and
+            digest(NOTES) == request["notes_sha256"], "Release source changed")
+    main = main_evidence(current["commit"])
+    require(main == request["main"], "Main evidence changed; prepare a new release")
+    check_gates(main["run_id"], main["run_attempt"], MAIN_GATES)
+    if request.get("npm") is not None:
+        import publish_npm
+
+        require(publish_npm.preflight(request["version"]) == request["npm"],
+                "npm release request changed")
+
+
+def select_payload(root):
+    """Never select an arbitrary attempt when multiple assembled payloads exist."""
+    manifests = list(root.glob("js-release-*/release-manifest.json"))
+    require(len(manifests) == 1, "Publication requires exactly one assembled release payload")
+    request = read(manifests[0])["request"]
+    require(manifests[0].parent.name == "js-release-" + request["identity"]["run_attempt"],
+            "Release artifact attempt differs")
+    return manifests[0].parent
+
+
 def check_record(record, tier, configuration, request):
     current = request["identity"]
     require(record.get("schema") == 1 and record.get("status") == "passed" and
@@ -296,31 +328,80 @@ def verify_attestations(directory, commit):
             "--signer-workflow", SIGNER, "--source-digest", commit)
 
 
+def release_state(tag, commit):
+    """Inspect only; existing bytes and refs are never overwritten or deleted."""
+    require(api(f"repos/{REPOSITORY}/git/ref/heads/main")["object"]["sha"] == commit,
+            "Main moved; validate and release the new commit")
+    refs = api(f"repos/{REPOSITORY}/git/matching-refs/tags/{tag}")
+    tagged = any(ref["ref"] == "refs/tags/" + tag for ref in refs)
+    matches = [item for item in pages(f"repos/{REPOSITORY}/releases") if item["tag_name"] == tag]
+    require(len(matches) <= 1, "Duplicate releases for the tag")
+    require(tagged or not matches, "A release exists without its tag")
+    if tagged:
+        require(api(f"repos/{REPOSITORY}/commits/{tag}")["sha"] == commit,
+                "Tag already exists at another commit")
+    return tagged, matches[0]["id"] if matches else None
+
+
+def create_draft(directory, request):
+    """Keep the REST creation identity; neither a list nor an untagged URL identifies it."""
+    created = json.loads(run(
+        "gh", "api", "--method", "POST", f"repos/{REPOSITORY}/releases",
+        "-f", "tag_name=" + request["tag"], "-f", "name=OpenTLV JS " + request["tag"],
+        "-f", "body=" + (directory / "release-notes.md").read_text(encoding="utf-8"),
+        "-F", "draft=true", "-F", "prerelease=false", capture=True))
+    identifier = created.get("id")
+    require(type(identifier) is int and identifier > 0 and created.get("tag_name") == request["tag"]
+            and created.get("draft") is True and created.get("prerelease") is False,
+            "Created draft identity differs")
+    for path in sorted(directory.iterdir()):
+        upload_asset(identifier, path)
+    return identifier
+
+
+def upload_asset(identifier, path):
+    # Construct the host and path ourselves; never send a token to a response-provided upload URL.
+    url = (f"https://uploads.github.com/repos/{REPOSITORY}/releases/{identifier}/assets?name=" +
+           urllib.parse.quote(path.name, safe=""))
+    request = urllib.request.Request(url, data=path.read_bytes(), method="POST", headers={
+        "Authorization": "Bearer " + os.environ["GH_TOKEN"],
+        "Content-Type": "application/octet-stream", "Accept": "application/vnd.github+json"})
+    with urllib.request.urlopen(request, timeout=120) as response:
+        json.load(response)
+
+
 def publish(directory):
-    request = verify_payload(directory)
+    request = verify_payload(directory, validate=validate_publish_request)
     commit = request["identity"]["commit"]
     verify_attestations(directory, commit)
-    # Final read before the first write; never overwrite an existing tag/release.
-    unused_tag(request["tag"], commit)
-    run("gh", "api", "--method", "POST", f"repos/{REPOSITORY}/git/refs",
-        "-f", "ref=refs/tags/" + request["tag"], "-f", "sha=" + commit)
-    run("gh", "release", "create", request["tag"], "--repo", REPOSITORY, "--verify-tag",
-        "--draft", "--title", "OpenTLV JS " + request["tag"],
-        "--notes-file", directory / "release-notes.md", *sorted(directory.iterdir()))
+    tagged, identifier = release_state(request["tag"], commit)
+    if not tagged:
+        run("gh", "api", "--method", "POST", f"repos/{REPOSITORY}/git/refs",
+            "-f", "ref=refs/tags/" + request["tag"], "-f", "sha=" + commit)
+    if identifier is None:
+        identifier = create_draft(directory, request)
+    release = api(f"repos/{REPOSITORY}/releases/{identifier}")
+    require(release.get("id") == identifier and type(release.get("draft")) is bool,
+            "Release identity differs")
+    # An absent list entry is harmless after creation; a conflicting entry is not.
     matches = [item for item in pages(f"repos/{REPOSITORY}/releases")
                if item["tag_name"] == request["tag"]]
-    require(len(matches) == 1, "Missing or duplicate draft release")
-    release = api(f"repos/{REPOSITORY}/releases/{matches[0]['id']}")
-    verify_published_assets(release, directory, request, True)
+    require(len(matches) <= 1 and all(item["id"] == identifier for item in matches),
+            "Conflicting or duplicate release identity")
+    verify_published_assets(release, directory, request, release["draft"])
     require(api(f"repos/{REPOSITORY}/commits/{request['tag']}")["sha"] == commit,
             "Release tag changed")
-    run("gh", "release", "edit", request["tag"], "--repo", REPOSITORY, "--draft=false")
-    release = api(f"repos/{REPOSITORY}/releases/{release['id']}")
+    if release["draft"]:
+        run("gh", "api", "--method", "PATCH", f"repos/{REPOSITORY}/releases/{identifier}",
+            "-F", "draft=false")
+    release = api(f"repos/{REPOSITORY}/releases/{identifier}")
+    require(release.get("id") == identifier, "Published release identity differs")
     verify_published_assets(release, directory, request, False)
     require(api(f"repos/{REPOSITORY}/commits/{request['tag']}")["sha"] == commit,
             "Published tag changed")
     write(ROOT / "build/published.json", {"url": release["html_url"], "tag": request["tag"],
-                                        "identity": request["identity"], "core": request["core"],
+                                        "release_id": identifier, "identity": hosted_identity(),
+                                        "payload_identity": request["identity"], "core": request["core"],
                                         "assets": [asset["name"] for asset in release["assets"]]})
     print(release["html_url"])
 
@@ -337,7 +418,7 @@ def main():
         assemble(ROOT / "build/evidence", ROOT / "build/release")
     else:
         (ROOT / "build/published.json").unlink(missing_ok=True)
-        publish(ROOT / "build/release")
+        publish(select_payload(ROOT / "build/publish-input"))
 
 
 if __name__ == "__main__":

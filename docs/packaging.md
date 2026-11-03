@@ -2,7 +2,9 @@
 
 The canonical [package.json](../package.json) defines the independent
 `@opentlv/opentlv` version. The first standalone release is `0.1.0` (#32), prepared
-against Core `v0.8.0`; `0.2.0` is the first npm registry version (#40). The earlier `0.1.0-dev.0` was an unreleased development
+against Core `v0.8.0`; `0.2.0` is the first npm registry version (#40).
+The next patch, `0.2.1`, contains release recovery fixes (#47) with the same
+Core pin. The earlier `0.1.0-dev.0` was an unreleased development
 identity, not a previous JS release; there were no JS repository tags or GitHub
 releases when checked on 2026-10-28. The JS version is not the pinned Core
 version: change it explicitly when advancing the binding; a Core pin change
@@ -170,22 +172,42 @@ section. The versioned release notes are the publication text.
    whose SHA-256 and file hashes the reproduced builds recorded; it does not
    rebuild it. The workflow attests all four assets: the archive,
    `release-manifest.json`, `release-notes.md` and `SHA256SUMS`.
-5. Publication rechecks evidence, checksums, attestations and unused tag status,
-   then creates the tag and a draft release. Only after the uploaded asset
-   names, sizes, SHA-256 digests, notes and tag commit match does it publish the
-   draft and verify the public result. It emits `js-published-<attempt>` with
-   the URL, source and asset identities.
+5. Publication rechecks evidence, checksums, attestations and the tag state,
+   then creates the tag and a draft release through the GitHub REST API. It
+   retains the returned release ID for uploads, verification and publication;
+   an absent entry in a delayed releases list does not lose that identity. Only
+   after names, sizes, SHA-256 digests, notes and tag commit match does it publish
+   the draft and verify the public result. `js-published-<attempt>` records the
+   release ID, URL, publishing identity, original payload identity and assets.
 6. Record the published URL, exact commit, Main and release run links in
    [issue #32](https://github.com/OpenTLV/opentlv-js/issues/32) and
    [Core epic #718](https://github.com/OpenTLV/opentlv/issues/718). Close the
    tracking only after publication and asset verification.
 
-If a failure occurs after creating a tag or draft, inspect that state before
-retrying; the workflow refuses to overwrite either. Earlier attempts' artifacts
-cannot satisfy a new attempt. A new main commit or Main run requires a new
-release attempt. No workflow has a tag-push trigger, so creating or pushing a
-tag cannot run checks or publish outside this gated workflow; a regression test
-enforces this for every workflow.
+### Recover an interrupted GitHub publication
+
+Use **Re-run failed jobs** in the original `JS Release` run. The publish job
+selects exactly one assembled `js-release-<attempt>` artifact from that run and
+revalidates its original Full attempt, current Main evidence, source, Core pin,
+checksums and attestations. It allows a later publishing attempt of the same
+run and commit; it does not substitute a new build or another run's evidence.
+
+- If only the tag exists at the verified commit, create its draft.
+- If a complete draft exists, require the exact local payload's asset names,
+  sizes and SHA-256 digests, notes and tag commit before publishing by ID.
+- If that exact release is already public (for example, the previous job lost
+  its response after publication), verify it and emit the receipt without writes.
+- If the draft has partial uploads, unexpected or duplicate assets, different
+  bytes or metadata, or the tag points elsewhere, stop without replacing,
+  deleting or retargeting anything. Record the run, tag, release ID and asset
+  metadata for maintainer review. Any manual cleanup requires a separate decision.
+
+A new dispatch still requires an unused tag. Do not use **Re-run all jobs** for
+publication recovery: multiple assembled payloads are ambiguous and rejected.
+A changed main tip or Main evidence also stops recovery. A new release requires
+fresh preparation and Full CI; it cannot reuse a previous version's evidence.
+If npm has already published, retry only its failed verification job as described
+below. No workflow has a tag-push trigger, so a tag cannot bypass these gates.
 
 Since `0.2.0`, install the package from npm with `npm install @opentlv/opentlv`.
 To use a downloaded release archive instead, check it against `SHA256SUMS` and
@@ -282,8 +304,8 @@ job then:
 
 1. Installs npm 11.21.1 on Node 22. Trusted publishing needs npm 11.5.1 and
    Node 22.14 or later; npm 12 would need Node 22.22.2.
-2. Runs `scripts/publish_npm.py prepare`. It takes the release assets of the
-   attempt that published the GitHub release and verifies them as the GitHub
+2. Runs `scripts/publish_npm.py prepare`. It takes the original attested release assets
+   identified by the GitHub publication receipt and verifies them as the GitHub
    publication did: request, Full records and gates, checksums, notes and the
    attestation of each asset. The public release and tag must hold exactly these
    assets, the environment must keep its protections, and the run must record an
@@ -340,9 +362,54 @@ later versions use the workflow:
 6. Dispatch later releases with `npm: true`, and verify each published version
    without `--unattested`.
 
-npm's [staged publishing](https://docs.npmjs.com/staged-publishing) would add an
-approval on npmjs.com, but `npm stage publish` packs a directory instead of
-publishing a given archive, so the workflow does not use it.
+### Direct publishing and configuration evidence (#47)
+
+This workflow deliberately uses direct `npm publish` of the attested tarball,
+with approval in the protected GitHub `npm` environment before it runs. npm's
+[staged publishing](https://docs.npmjs.com/staged-publishing/) is a separate
+review/promotion flow and is not implemented here. Keep the publisher's
+`npm publish` permission enabled; its additional `npm stage publish` permission
+does not make this workflow staged. No separate `npm dist-tag` command is used.
+
+The [2026-11-03 walkthrough in #47](https://github.com/OpenTLV/opentlv-js/issues/47)
+records maintainer screenshots of the publisher identity `OpenTLV`,
+`opentlv-js`, `js-release.yml`, `npm`. It also records environment selections:
+required reviewer `marekcingel`, self-review prevention off for the sole
+maintainer, administrator bypass off, only branch `main`, no environment
+secrets/variables. These are reported UI selections, not an independent API
+verification of the saved configuration. Release preflight checks the saved
+environment protections again. Retain `OPENTLV_DOCS_DISPATCH_TOKEN`: it serves
+Docs integration, not npm publication.
+
+Before the next release, retain evidence of the saved environment and its branch
+policies, npm organization-wide 2FA, package ownership/publisher permissions,
+and **Require two-factor authentication and disallow tokens**. Check repository,
+environment and applicable organization secret names for legacy npm tokens;
+never copy secret values into evidence. Publisher registration alone does not
+prove OIDC authentication or provenance.
+
+The issue reports a pending-validation deadline of **2026-11-05 11:28 UTC**
+(**12:28 Europe/Bratislava**). Recheck npm settings before dispatch; if it has
+expired, configure it again for a genuine release. Do not publish a dummy version
+or weaken checks to meet the deadline.
+
+The changelog is closed as `0.2.1` with the preparation date; if the release
+is dispatched later, adjust that date before merging. Merge the reviewed
+preparation, wait for Main on that exact revision, then dispatch `JS Release`
+from `main` with `tag: v0.2.1` and `npm: true`. Approve the protected environment.
+After success, retain `js-npm-<attempt>/receipt.json` and run:
+
+```sh
+python -B scripts/publish_npm.py verify 0.2.1 --output build/npm-verify-0.2.1
+```
+
+Link the configuration evidence, Main/release runs, public release, receipt and
+independent `verification.json` to [#47](https://github.com/OpenTLV/opentlv-js/issues/47),
+[#36](https://github.com/OpenTLV/opentlv-js/issues/36) and
+[Core #716](https://github.com/OpenTLV/opentlv/issues/716). First live OIDC
+publication and npm SLSA provenance remain pending until those checks pass;
+the manual `0.2.0` exception is not evidence for later releases. Keep #47 open
+until its remaining configuration and live-release criteria are verified.
 
 ### Local validation (#39)
 
