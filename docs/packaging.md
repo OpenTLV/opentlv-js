@@ -192,11 +192,27 @@ revalidates its original Full attempt, current Main evidence, source, Core pin,
 checksums and attestations. It allows a later publishing attempt of the same
 run and commit; it does not substitute a new build or another run's evidence.
 
-- If only the tag exists at the verified commit, create its draft.
-- If a complete draft exists, require the exact local payload's asset names,
-  sizes and SHA-256 digests, notes and tag commit before publishing by ID.
+Every publishing attempt keeps a journal, `build/publish-state/draft.json`,
+uploaded as `js-draft-<attempt>` even when the job fails. The journal is written
+before the first write and again just before the draft is requested. Once
+GitHub returns a valid draft object, it records that draft's release ID before
+any upload. A retry downloads the journals of the run and finds the draft only by
+that recorded ID. The releases list can lag behind a creation, so it serves only
+to detect conflicting or duplicate releases.
+
+- If only the tag exists at the verified commit and a journal shows that no
+  draft was requested, create the draft.
+- If a journal records a release ID, read that release by ID and require the
+  exact local payload's asset names, sizes and SHA-256 digests, notes and tag
+  commit before publishing it.
 - If that exact release is already public (for example, the previous job lost
   its response after publication), verify it and emit the receipt without writes.
+  Without a recorded ID, only the exact
+  [release-by-tag endpoint](https://docs.github.com/en/rest/releases/releases#get-a-release-by-tag-name),
+  which serves only published releases, can identify it.
+- If a draft was requested but no ID was recorded (lost or malformed response),
+  or the tag exists without any journal of the run (lost runner), an unlisted
+  draft may exist: stop without creating another one.
 - If the draft has partial uploads, unexpected or duplicate assets, different
   bytes or metadata, or the tag points elsewhere, stop without replacing,
   deleting or retargeting anything. Record the run, tag, release ID and asset

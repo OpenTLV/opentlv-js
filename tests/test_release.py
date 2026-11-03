@@ -252,7 +252,7 @@ class Payload(unittest.TestCase):
         with mock.patch.object(release, "run", side_effect=subprocess.CalledProcessError(1, "gh")) as run, \
                 mock.patch.object(release, "release_state") as unused, \
                 self.assertRaises(subprocess.CalledProcessError):
-            release.publish(self.output)
+            release.publish(self.output, self.root / "journals")
         self.assertEqual(run.call_args.args[1:3], ("attestation", "verify"))
         unused.assert_not_called()
 
@@ -296,7 +296,7 @@ class Payload(unittest.TestCase):
                 mock.patch.object(release, "hosted_identity", return_value={**IDENTITY, "run_attempt": "3"}), \
                 mock.patch.object(release, "ROOT", self.root), mock.patch("builtins.print"):
             try:
-                release.publish(self.output)
+                release.publish(self.output, self.root / "journals")
             finally:
                 self.calls = [call.args for call in run.call_args_list]
                 self.uploads = upload.call_args_list
@@ -317,6 +317,26 @@ class Payload(unittest.TestCase):
         self.assertEqual(record["release_id"], 42)
         self.assertEqual(record["identity"]["run_attempt"], "3")
         self.assertEqual(record["payload_identity"], IDENTITY)
+        self.assertEqual(release.read(self.root / release.JOURNAL), {
+            "schema": 1, "tag": self.request["tag"], "commit": IDENTITY["commit"], "run_id": "123",
+            "payload_attempt": "2", "attempt": "3", "draft_requested": True, "release_id": 42})
+
+    def test_untagged_attempt_journals_no_draft_before_its_first_write(self):
+        self.assemble()
+        journals = []
+
+        def command(*args, **kwargs):
+            journals.append(release.read(self.root / release.JOURNAL))
+            raise subprocess.CalledProcessError(1, "gh")
+        with mock.patch.object(release, "run", side_effect=lambda *args, **kwargs:
+                               None if args[1:3] == ("attestation", "verify") else command(*args)), \
+                mock.patch.object(release, "release_state", return_value=(False, None)), \
+                mock.patch.object(release, "hosted_identity", return_value=IDENTITY), \
+                mock.patch.object(release, "ROOT", self.root), self.assertRaises(subprocess.CalledProcessError):
+            release.publish(self.output, self.root / "journals")
+        self.assertEqual(len(journals), 1)
+        self.assertIs(journals[0]["draft_requested"], False)
+        self.assertIsNone(journals[0]["release_id"])
 
     def test_tag_only_retry_creates_only_the_draft(self):
         self.assemble()
@@ -400,6 +420,19 @@ class Workflow(unittest.TestCase):
         self.assertLess(text.index("actions/attest-build-provenance@v3"), text.index("  publish:"))
         for command in ("prepare", "assemble", "publish"):
             self.assertIn(f"run: python3 -B scripts/release.py {command}\n", text)
+
+    def test_publish_job_keeps_the_draft_journal_of_every_attempt(self):
+        text = workflow("js-release.yml")
+        job = text[text.index("  publish:\n"):text.index("  npm:\n    name:")]
+        steps = [job.index(marker) for marker in (
+            "          pattern: js-release-*\n          path: build/publish-input\n",
+            "          pattern: js-draft-*\n          path: build/publish-state-input\n",
+            "run: python3 -B scripts/release.py publish\n",
+            "        if: always()\n        with:\n          name: js-draft-${{ github.run_attempt }}\n"
+            "          path: build/publish-state/draft.json\n          if-no-files-found: ignore\n",
+            "          name: js-published-${{ github.run_attempt }}\n")]
+        self.assertEqual(steps, sorted(steps))
+        self.assertEqual(release.JOURNAL.as_posix(), "build/publish-state/draft.json")
 
     def test_npm_follows_the_github_release_behind_the_approved_environment(self):
         text = workflow("js-release.yml")

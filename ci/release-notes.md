@@ -15,8 +15,9 @@ OpenTLV Core. Install with `npm install @opentlv/opentlv`.
 - Retains direct npm publication of the attested archive through the protected
   `npm` environment. Staged npm publishing is not implemented.
 
-This is the first version the release workflow publishes to npm through
-trusted publishing (OIDC, no registry token), so npm lists its SLSA provenance.
-The `0.2.0` exception for a version without provenance does not apply to it.
-Verify a published version with
+The release workflow is to publish this version to npm through trusted
+publishing (OIDC, no registry token), the first time it does so; npm is then
+expected to list its SLSA provenance. The `0.2.0` exception for a version
+without provenance does not apply: verification fails if provenance is missing.
+Verify the npm version with
 [`scripts/publish_npm.py verify`](https://github.com/OpenTLV/opentlv-js/blob/v0.2.1/docs/packaging.md#verify-a-published-version).
